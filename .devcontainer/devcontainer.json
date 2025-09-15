@@ -1,0 +1,30 @@
+{
+  "name": "NetAlertX DevContainer",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../"
+  },
+  "workspaceFolder": "/workspaces",
+
+  "runArgs": [
+    "--privileged"
+  ],
+  
+  "postCreateCommand": "/workspace/NetAlertX/.devcontainer/setup-backend.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker",
+        "felixfbecker.php-debug",
+        "bmewburn.vscode-intelephense-client",
+        "xdebug.php-debug"
+      ]
+    }
+  },
+  "forwardPorts": [20211],
+
+  // Optional: ensures compose services are stopped when you close the window
+  "shutdownAction": "stopCompose"
+}
