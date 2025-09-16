@@ -4,13 +4,15 @@
     "dockerfile": "Dockerfile",
     "context": "../"
   },
-  "workspaceFolder": "/workspaces",
+  "workspaceFolder": "/workspaces/NetAlertX",
 
   "runArgs": [
-    "--privileged"
+    "--privileged",
+    // Ensure containers can resolve host.docker.internal to the host (required on Linux)
+    "--add-host=host.docker.internal:host-gateway"
   ],
   
-  "postCreateCommand": "/workspace/NetAlertX/.devcontainer/setup-backend.sh",
+  "postCreateCommand": "${containerWorkspaceFolder}/.devcontainer/scripts/setup.sh",
 
   "customizations": {
     "vscode": {
@@ -21,10 +23,30 @@
         "bmewburn.vscode-intelephense-client",
         "xdebug.php-debug"
       ]
+      ,
+      "settings": {
+        "terminal.integrated.cwd": "${containerWorkspaceFolder}"
+      }
     }
   },
-  "forwardPorts": [20211],
+  "forwardPorts": [20211, 20212, 9003, 5678],
+
+  // Optional: Give friendly names to forwarded ports so VS Code Ports view shows labels
+  "portsAttributes": {
+    "20211": {
+      "label": "NetAlertX (app)"
+    },
+    "20212": {
+      "label": "NetAlertX (data)"
+    },
+    "9003": {
+      "label": "PHP Debug (Xdebug)"
+    },
+    "5678": {
+      "label": "Python Debug"
+    }
+  },
 
   // Optional: ensures compose services are stopped when you close the window
-  "shutdownAction": "stopCompose"
+  "shutdownAction": "stopContainer"
 }
