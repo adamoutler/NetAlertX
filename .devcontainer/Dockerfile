@@ -60,6 +60,8 @@ FROM runner
 ENV INSTALL_DIR=/app
 
 COPY install/netalertx.template.conf /netc/nginx/conf.d/netalert-frontend.conf
-RUN apk add --no-cache git nano vim jq php83-pecl-xdebug
+# Install common tools, xdebug and pip
+RUN apk add --no-cache git nano vim jq php83-pecl-xdebug py3-pip nodejs
+# Install debugpy in the virtualenv if present, otherwise into system python3
+RUN /bin/sh -c '(/opt/venv/bin/python3 -m pip install --no-cache-dir debugpy) || (python3 -m pip install --no-cache-dir debugpy) || true'
 WORKDIR /workspaces/NetAlertX
-

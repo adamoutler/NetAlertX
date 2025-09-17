@@ -16,15 +16,4 @@ sed -i '/aiofreepybox.git/ s/ \\$//' /workspaces/NetAlertX/.devcontainer/Dockerf
 # don't cat the file, just copy it in because it doesn't exist at build time
 sed -i 's|^ RUN cat ${INSTALL_DIR}/install/freebox_certificate.pem >> /opt/venv/lib/python3.12/site-packages/aiofreepybox/freebox_certificates.pem$| COPY install/freebox_certificate.pem /opt/venv/lib/python3.12/site-packages/aiofreepybox/freebox_certificates.pem |' /workspaces/NetAlertX/.devcontainer/Dockerfile
 
-cat << 'EOF' >> /workspaces/NetAlertX/.devcontainer/Dockerfile
-# Dockerfile extension for devcontainer
-# This stage uses the result of the stage above as its starting point.
-
-FROM runner
-ENV INSTALL_DIR=/app
-
-COPY install/netalertx.template.conf /netc/nginx/conf.d/netalert-frontend.conf
-RUN apk add --no-cache git nano vim jq php83-pecl-xdebug
-WORKDIR /workspaces/NetAlertX
-
-EOF
+cat /workspaces/NetAlertX/.devcontainer/resources/devcontainer-Dockerfile >> /workspaces/NetAlertX/.devcontainer/Dockerfile

@@ -13,6 +13,10 @@
   ],
   
   "postCreateCommand": "${containerWorkspaceFolder}/.devcontainer/scripts/setup.sh",
+  // Run setup on every container start to ensure services are started when the devcontainer starts
+  // (postStartCommand removed so VS Code workspace task `Start NetAlertX (setup + logs)` can run on folder open)
+  // // Ensure setup also runs when attaching to an existing container (covers rebuild/attach cases)
+  // "postAttachCommand": "sh -c ''",
 
   "customizations": {
     "vscode": {
