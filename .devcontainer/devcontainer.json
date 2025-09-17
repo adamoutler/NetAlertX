@@ -12,12 +12,8 @@
     "--add-host=host.docker.internal:host-gateway"
   ],
   
-  "postCreateCommand": "${containerWorkspaceFolder}/.devcontainer/scripts/setup.sh",
-  // Run setup on every container start to ensure services are started when the devcontainer starts
-  // (postStartCommand removed so VS Code workspace task `Start NetAlertX (setup + logs)` can run on folder open)
-  // // Ensure setup also runs when attaching to an existing container (covers rebuild/attach cases)
-  // "postAttachCommand": "sh -c ''",
-
+  "postStartCommand": "${containerWorkspaceFolder}/.devcontainer/scripts/setup.sh",
+  
   "customizations": {
     "vscode": {
       "extensions": [
@@ -35,19 +31,18 @@
   },
   "forwardPorts": [20211, 20212, 9003, 5678],
 
-  // Optional: Give friendly names to forwarded ports so VS Code Ports view shows labels
   "portsAttributes": {
     "20211": {
-      "label": "NetAlertX (app)"
+      "label": "Frontend:Nginx+PHP"
     },
     "20212": {
-      "label": "NetAlertX (data)"
+      "label": "Backend:GraphQL"
     },
     "9003": {
-      "label": "PHP Debug (Xdebug)"
+      "label": "PHP Debug:Xdebug"
     },
     "5678": {
-      "label": "Python Debug"
+      "label": "Python Debug:debugpy"
     }
   },
 

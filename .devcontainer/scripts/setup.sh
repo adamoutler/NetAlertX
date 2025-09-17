@@ -149,35 +149,12 @@ start_services() {
     touch /app/log/app_stdout.log /app/log/app_stderr.log || true
     # Start the server from the server package directory so imports like `import conf` resolve
 
-    cd "${APP_DIR}/server"
+    /workspaces/NetAlertX/.devcontainer/scripts/start-graphql.sh
     # Run the package entrypoint directly to set the proper module path
     # Start the app using the system python3 directly
-    PYBIN="$(command -v python3 || command -v python || true)"
-    echo "      -> Launching app with python binary: $PYBIN"
-    if [ -n "$PYBIN" ]; then
-        nohup "$PYBIN" __main__.py > /app/log/app_stdout.log 2>/app/log/app_stderr.log &
-    else
-        echo "  -> ERROR: No python interpreter found (python3/python). App will not start."
-    fi
+    
    
-    # give it a moment to start and verify it's listening on the API port
-    sleep 0.3
-    if ss -ltn | grep -q ":20212[[:space:]]"; then
-        echo "  -> Application started and listening on 20212"
-    else
-        echo "  -> Application did not appear to listen on 20212, attempting a restart..."
-        # attempt a clean restart once more and capture output
-        pkill -f "__main__.py" || true
-        sleep 0.1
-        cd "${APP_DIR}/server" || true
-    nohup python3 __main__.py > /app/log/app_stdout.log 2>/app/log/app_stderr.log &
-        sleep 0.5
-        if ss -ltn | grep -q ":20212[[:space:]]"; then
-            echo "  -> Application restart succeeded and is listening on 20212"
-        else
-            echo "  -> WARNING: Application still not listening on 20212 after restart. Check /app/log/app_stderr.log for errors."
-        fi
-    fi
+   
 
 
 }

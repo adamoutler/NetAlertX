@@ -79,6 +79,46 @@
       }
     },
     {
+      "label": "Restart GraphQL",
+      "type": "shell",
+      // Minimal: start backend under debugpy with absolute paths so cwd quirks don't matter.
+      // 1. Kill existing python3
+      // 2. Short delay
+      // 3. Exec debugpy directly referencing /app/server/__main__.py
+      // 4. Run detached (nohup + setsid) so task can exit cleanly without killing process.
+      //    Use exec to avoid extra shell layer; append marker file for quick verification.
+      "command": "killall python3 2>/dev/null || true; sleep 0.3; mkdir -p /app/log; setsid nohup python3 -m debugpy --listen 0.0.0.0:5678 /app/server/__main__.py > /app/log/app_stdout.log 2> /app/log/app_stderr.log & echo $! > /app/log/app_backend.pid; echo 'NetAlertX backend restarted (PID '$(cat /app/log/app_backend.pid)')'",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "icon": {
+        "id": "debug-restart",
+        "color": "terminal.ansiYellow"
+      }
+    },
+    {
+      "label": "Restart Nginx and PHP-FPM",
+      "type": "shell",
+      "command": "killall php-fpm83 nginx 2>/dev/null || true; sleep 1; php-fpm83 && nginx",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "icon": {
+        "id": "debug-restart",
+        "color": "terminal.ansiYellow"
+      }
+    },
+    {
   "label": "Stop NetAlertX Services",
       "type": "shell",
       "command": "pkill -f 'php-fpm83|nginx|crond|python3' || true",
