@@ -8,7 +8,7 @@
       "type": "shell",
       "command": "${workspaceFolder:NetAlertX}/.devcontainer/scripts/generate-dockerfile.sh",
       "presentation": {
-        "echo": true,
+        "echo": true, 
         "reveal": "always",
         "panel": "shared",
         "showReuseMessage": false
@@ -24,26 +24,6 @@
       "icon": {
         "id": "tools",
         "color": "terminal.ansiYellow"
-      }
-    },
-    {
-      "label": "Stream NetAlertX Logs (auto)",
-      "type": "shell",
-      "runOptions": {
-        "runOn": "folderOpen"
-      },
-      "command": "${workspaceFolder:NetAlertX}/.devcontainer/scripts/stream-logs.sh",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "panel": "new",
-        "showReuseMessage": false,
-        "clear": false
-      },
-      "problemMatcher": [],
-      "icon": {
-        "id": "output",
-        "color": "terminal.ansiWhite"
       }
     },
     {
@@ -87,7 +67,7 @@
       // 3. Exec debugpy directly referencing /app/server/__main__.py
       // 4. Run detached (nohup + setsid) so task can exit cleanly without killing process.
       //    Use exec to avoid extra shell layer; append marker file for quick verification.
-      "command": "killall python3 2>/dev/null || true; sleep 0.3; mkdir -p /app/log; setsid nohup python3 -m debugpy --listen 0.0.0.0:5678 /app/server/__main__.py > /app/log/app_stdout.log 2> /app/log/app_stderr.log & echo $! > /app/log/app_backend.pid; echo 'NetAlertX backend restarted (PID '$(cat /app/log/app_backend.pid)')'",
+      "command": "sudo killall python3 2>/dev/null || true; sleep 0.3; mkdir -p /app/log; setsid nohup python3 -m debugpy --listen 0.0.0.0:5678 /app/server/__main__.py > /app/log/app_stdout.log 2> /app/log/app_stderr.log & echo $! > /app/log/app_backend.pid; echo 'NetAlertX backend restarted (PID '$(cat /app/log/app_backend.pid)')'; sleep 1",
       "presentation": {
         "echo": true,
         "reveal": "always",

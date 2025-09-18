@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Remote Attach",
+            "name": "Python Backend Debug: Attach",
             "type": "debugpy",
             "request": "attach",
             "connect": {
@@ -22,7 +22,7 @@
             ]
         },
         {
-            "name": "Listen for Xdebug",
+            "name": "PHP Frontend Xdebug: Listen",
             "type": "php",
             "request": "launch",
             "port": 9003,

@@ -1,8 +1,10 @@
 {
   "name": "NetAlertX DevContainer",
+  "remoteUser": "netalertx",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": "../"
+    "context": "..",
+    "target": "devcontainer"
   },
   "workspaceFolder": "/workspaces/NetAlertX",
 
@@ -29,7 +31,7 @@
       }
     }
   },
-  "forwardPorts": [20211, 20212, 9003, 5678],
+  "forwardPorts": [5678, 9000, 9003, 20211, 20212],
 
   "portsAttributes": {
     "20211": {
@@ -40,6 +42,9 @@
     },
     "9003": {
       "label": "PHP Debug:Xdebug"
+    },
+    "9000": {
+      "label": "PHP-FPM:FastCGI"
     },
     "5678": {
       "label": "Python Debug:debugpy"

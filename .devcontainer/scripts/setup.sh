@@ -1,26 +1,13 @@
 #! /bin/bash
-
-
-# Setup source directory
-mkdir -p /app
-rm -Rf /app/*
-echo "Dev">/app/.VERSION
-cp -R /workspaces/NetAlertX/CODE_OF_CONDUCT.md /app/
-ln -s /workspaces/NetAlertX/api /app/api
-ln -s /workspaces/NetAlertX/back /app/back
-mkdir /app/config
-ln -s /workspaces/NetAlertX/db /app/db
-cp -R /workspaces/NetAlertX/dockerfiles /app/dockerfiles
-ln -s /workspaces/NetAlertX/docs /app/docs
-ln -s /workspaces/NetAlertX/front /app/front
-ln -s /workspaces/NetAlertX/install /app/install
-ln -s /workspaces/NetAlertX/log /app/log
-ln -s /workspaces/NetAlertX/scripts /app/scripts
-ln -s /workspaces/NetAlertX/server /app/server
-ln -s /workspaces/NetAlertX/test /app/test
-ln -s /workspaces/NetAlertX/mkdocs.yml /app/mkdocs.yml
+id
 
 # Define variables (paths, ports, environment)
+
+export APP_DIR="/app"
+export APP_COMMAND="setsid  python3 /app/server"
+export PHP_FPM_BIN="setsid /usr/sbin/php-fpm83"
+export NGINX_BIN="setsid  /usr/sbin/nginx"
+export CROND_BIN="setsid  /usr/sbin/crond"
 export ALWAYS_FRESH_INSTALL=false
 export INSTALL_DIR=/app
 export APP_DATA_LOCATION=/app/config
@@ -32,45 +19,38 @@ export DB_FILE="app.db"
 export FULL_FILEDB_PATH="${INSTALL_DIR}/db/${DB_FILE}"
 export NGINX_CONFIG_FILE="/etc/nginx/http.d/${NGINX_CONF_FILE}"
 export OUI_FILE="/usr/share/arp-scan/ieee-oui.txt" # Define the path to ieee-oui.txt and ieee-iab.txt
+export TZ=Europe/Paris
+export PORT=20211
+export SOURCE_DIR="/workspaces/NetAlertX"
+
+# Setup source directory
+echo "Dev">${INSTALL_DIR}/.VERSION
+cp -R ${SOURCE_DIR}/CODE_OF_CONDUCT.md ${INSTALL_DIR}/
+ln -s ${SOURCE_DIR}/api ${INSTALL_DIR}/api
+ln -s ${SOURCE_DIR}/back ${INSTALL_DIR}/back
+cp -R ${SOURCE_DIR}/config ${INSTALL_DIR}/config
+ln -s ${SOURCE_DIR}/db ${INSTALL_DIR}/db
+cp -R ${SOURCE_DIR}/dockerfiles ${INSTALL_DIR}/dockerfiles
+ln -s ${SOURCE_DIR}/docs ${INSTALL_DIR}/docs
+ln -s ${SOURCE_DIR}/front ${INSTALL_DIR}/front
+ln -s ${SOURCE_DIR}/install ${INSTALL_DIR}/install
+ln -s ${SOURCE_DIR}/log ${INSTALL_DIR}/log
+ln -s ${SOURCE_DIR}/scripts ${INSTALL_DIR}/scripts
+ln -s ${SOURCE_DIR}/server ${INSTALL_DIR}/server
+ln -s ${SOURCE_DIR}/test ${INSTALL_DIR}/test
+ln -s ${SOURCE_DIR}/mkdocs.yml ${INSTALL_DIR}/mkdocs.yml
+
+sudo find ${INSTALL_DIR}/ -type d -exec chmod 775 {} \;
+sudo find ${INSTALL_DIR}/ -type f -exec chmod 664 {} \;
+sudo cp -na "${INSTALL_DIR}/back/${CONF_FILE}" "${INSTALL_DIR}/config/${CONF_FILE}"
+sudo cp -na "${INSTALL_DIR}/back/${DB_FILE}" "${FULL_FILEDB_PATH}"
+sudo touch "${INSTALL_DIR}"/log/{app.log,execution_queue.log,app_front.log,app.php_errors.log,stderr.log,stdout.log,db_is_locked.log}
+sudo touch "${INSTALL_DIR}"/api/user_notifications.json
+sudo date +%s > "${INSTALL_DIR}/front/buildtimestamp.txt"
+sudo chown netalertx:www-data "${INSTALL_DIR}/config/${CONF_FILE}" || true
+sudo chmod 640 "${INSTALL_DIR}/config/${CONF_FILE}" || true
 
 
-TZ=Europe/Paris
-PORT=20211
-
-DEV_LOCATION=/path/to/local/source/code
-
-
-#init.sh items
-
-cp -na "${INSTALL_DIR}/back/${CONF_FILE}" "${INSTALL_DIR}/config/${CONF_FILE}"
-cp -na "${INSTALL_DIR}/back/${DB_FILE}" "${FULL_FILEDB_PATH}"
-chmod 777 ${INSTALL_DIR}/
-chmod 777 ${INSTALL_DIR}/config
-chmod 777 ${INSTALL_DIR}/config/*
-touch "${INSTALL_DIR}"/log/{app.log,execution_queue.log,app_front.log,app.php_errors.log,stderr.log,stdout.log,db_is_locked.log}
-touch "${INSTALL_DIR}"/api/user_notifications.json
-date +%s > "${INSTALL_DIR}/front/buildtimestamp.txt"
-
-# Ensure the config directory and file are readable by the PHP-FPM/nginx user
-if [ -d "${INSTALL_DIR}/config" ]; then
-    chmod 755 "${INSTALL_DIR}/config" || true
-fi
-if [ -f "${INSTALL_DIR}/config/${CONF_FILE}" ]; then
-    chown nginx:www-data "${INSTALL_DIR}/config/${CONF_FILE}" || true
-    chmod 640 "${INSTALL_DIR}/config/${CONF_FILE}" || true
-fi
-
-
-
-
-
-install -d -o nginx -g www-data /run/php/
-
-APP_DIR="/app"
-APP_COMMAND="python3 /app/server"
-PHP_FPM_BIN="/usr/sbin/php-fpm83"
-NGINX_BIN="/usr/sbin/nginx"
-CROND_BIN="/usr/sbin/crond"
 
 
 
@@ -88,17 +68,6 @@ main() {
     start_services
 
     echo
-    echo "--- All services are running in the background. ---"
-    echo "Processes:"
-    ps -ef | grep -E 'nginx|php-fpm|crond|python' || true
-    echo
-    echo "Emitting recent startup logs for nginx, php-fpm and app (script will exit when done)."
-
-    # Allow some time for processes to write initial logs
-    sleep 0.5
-
-    
-
     echo "Setup complete. Exiting setup script. Services continue running in background."
 }
 
@@ -108,28 +77,26 @@ main() {
 # start_services: start crond, PHP-FPM, nginx and the application
 start_services() {
     echo "[2/2] Starting services..."
-
-    killall crond &>/dev/null || true
-    $CROND_BIN -f &
-
     killall php-fpm83 &>/dev/null || true
+    killall crond &>/dev/null || true
     # Give the OS a moment to release the php-fpm socket
     sleep 0.3
+    echo "      -> Starting CronD"
+    $CROND_BIN -f &
+
     # Start php-fpm in foreground but redirect its stdout/stderr to a dedicated log
-    mkdir -p /var/log/php
-    touch /var/log/php/php-fpm.stdout.log
-    chown nginx:www-data /var/log/php/php-fpm.stdout.log || true
-    $PHP_FPM_BIN -F > /var/log/php/php-fpm.stdout.log 2>&1 &
+
+    
+    
+    echo "      -> Starting PHP-FPM"
+    $PHP_FPM_BIN -F 2>&1 > /var/log/php/php-fpm.stdout.log &
 
     # After starting php-fpm, ensure the unix socket has the right ownership and perms
     # (sometimes php-fpm creates the socket as root; nginx needs 'nginx' user and 'www-data' group)
     sleep 0.1
-    if [ -e /run/php/php8.3-fpm.sock ]; then
-        chown nginx:www-data /run/php/php8.3-fpm.sock || true
-        chmod 0660 /run/php/php8.3-fpm.sock || true
-    fi
 
-    killall nginx &>/dev/null || true
+
+    sudo killall nginx &>/dev/null || true
     # Wait for the previous nginx processes to exit and for the port to free up
     tries=0
     # Check for listeners on the port and wait up to a short timeout
@@ -138,14 +105,17 @@ start_services() {
         sleep 0.2
         tries=$((tries+1))
     done
-    envsubst '$LISTEN_ADDR $PORT $INSTALL_DIR' < /workspaces/NetAlertX/install/netalertx.template.conf > /etc/nginx/http.d/netalertx-frontend.conf
+    sleep 0.2
+    sudo rm /var/lib/nginx/logs/* 2>/dev/null || true
     # Start nginx (it manages its own log files in /var/log/nginx)
+    echo "      -> Starting Nginx"
     $NGINX_BIN &
 
   
-    echo "      -> Starting Application in ${APP_DIR}/server..."
+    echo "      -> Starting GraphQL ${APP_DIR}/server..."
     # Ensure app log directory exists
     mkdir -p /app/log
+    
     touch /app/log/app_stdout.log /app/log/app_stderr.log || true
     # Start the server from the server package directory so imports like `import conf` resolve
 
@@ -162,28 +132,17 @@ start_services() {
 # configure_php: configure PHP-FPM and enable dev debug options
 configure_php() {
     echo "[1/2] Configuring PHP-FPM..."
+    sudo killall php-fpm83 &>/dev/null || true
     install -d -o nginx -g www-data /run/php/ &>/dev/null
-    sed -i "/^;pid/c\pid = /run/php/php8.3-fpm.pid" /etc/php83/php-fpm.conf
-    sed -i "/^listen/c\listen = /run/php/php8.3-fpm.sock" /etc/php83/php-fpm.d/www.conf
-    # Ensure listen.owner/listen.group and listen.mode are set (some distros may not include the commented lines)
-    if grep -q "^listen.owner" /etc/php83/php-fpm.d/www.conf 2>/dev/null; then
-        sed -i "/^listen.owner/c\listen.owner = nginx" /etc/php83/php-fpm.d/www.conf || true
-    else
-        echo "listen.owner = nginx" >> /etc/php83/php-fpm.d/www.conf || true
-    fi
-    if grep -q "^listen.group" /etc/php83/php-fpm.d/www.conf 2>/dev/null; then
-        sed -i "/^listen.group/c\listen.group = www-data" /etc/php83/php-fpm.d/www.conf || true
-    else
-        echo "listen.group = www-data" >> /etc/php83/php-fpm.d/www.conf || true
-    fi
-    if grep -q "^listen.mode" /etc/php83/php-fpm.d/www.conf 2>/dev/null; then
-        sed -i "/^listen.mode/c\listen.mode = 0660" /etc/php83/php-fpm.d/www.conf || true
-    else
-        echo "listen.mode = 0660" >> /etc/php83/php-fpm.d/www.conf || true
-    fi
-    sed -i "/^user/c\user = nginx" /etc/php83/php-fpm.d/www.conf
+    sudo sed -i "/^;pid/c\pid = /run/php/php8.3-fpm.pid" /etc/php83/php-fpm.conf
 
-    mkdir -p /etc/php83/conf.d
+    sudo sed -i 's|^listen = .*|listen = 127.0.0.1:9000|' /etc/php83/php-fpm.d/www.conf
+    # Optional: ensure Nginx fastcgi_pass matches (adjust path/pattern if different)
+    sudo sed -i 's|fastcgi_pass .*|fastcgi_pass 127.0.0.1:9000;|' /etc/nginx/http.d/*.conf
+
+    sudo mkdir -p /etc/php83/conf.d
+    sudo cp /workspaces/NetAlertX/.devcontainer/resources/99-xdebug.ini /etc/php83/conf.d/99-xdebug.ini
+
     # enable debug logging
     # cat > /etc/php83/conf.d/99-debug.ini <<'PHPINI'
     # display_errors=1
@@ -192,14 +151,12 @@ configure_php() {
     # error_reporting=E_ALL
     # error_log=/var/log/php/php_errors.log
     # PHPINI
-    mkdir -p /var/log/php
-    touch /var/log/php/php_errors.log
-    chown -R nginx:www-data /var/log/php
-    chmod 660 /var/log/php/php_errors.log
+    
+    sudo rm -R /var/log/php83 &>/dev/null || true
+    install -d -o netalertx -g www-data -m 755 var/log/php83;
+    sudo ln -s /var/log/php /var/log/php83 || true
 
-
-    cp /workspaces/NetAlertX/.devcontainer/resources/99-xdebug.ini /etc/php83/conf.d/99-xdebug.ini
-    chmod 644 /etc/php83/conf.d/99-xdebug.ini || true
+    sudo chmod 644 /etc/php83/conf.d/99-xdebug.ini || true
 
 }
 
