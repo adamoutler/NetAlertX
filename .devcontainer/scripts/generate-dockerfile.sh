@@ -1,11 +1,15 @@
 #!/bin/sh
 
+# Generator for .devcontainer/Dockerfile
+# Combines the root /Dockerfile (with some COPY lines removed) and
+# the dev-only stage in .devcontainer/resources/devcontainer-Dockerfile.
+# Run this script after modifying the resource Dockerfile to refresh
+# the final .devcontainer/Dockerfile used by the devcontainer.
 
-# Make a copy of the original Dockerfile to the .devcontainer folder 
-# but remove the COPY . ${INSTALL_DIR}/ command from it. This is done
-# to avoid overwriting the /app directory in the devcontainer with a copy
-# of the source code from the host, which would break the symlinks and 
-# debugging capabilities.
+# Make a copy of the original Dockerfile to the .devcontainer folder
+# but remove the COPY . ${INSTALL_DIR}/ command from it. This avoids
+# overwriting /app (which uses symlinks to the workspace) and preserves
+# debugging capabilities inside the devcontainer.
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 DEVCONTAINER_DIR="${SCRIPT_DIR%/scripts}"

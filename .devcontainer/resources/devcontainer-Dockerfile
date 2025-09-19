@@ -1,11 +1,15 @@
-# Dockerfile extension for devcontainer
-# This stage uses the result of the stage above as its starting point.
+# Devcontainer build stage (do not build directly)
+# This file is combined with the root /Dockerfile by
+#   .devcontainer/scripts/generate-dockerfile.sh
+# The generator appends this stage to produce .devcontainer/Dockerfile.
+# Prefer to place dev-only setup here; use setup.sh only for runtime fixes.
 
 FROM runner AS devcontainer
-ENV INSTALL_DIR=/app PYTHONPATH=/workspace/NetAlertX:/app
+ENV INSTALL_DIR=/app 
+ENV PYTHONPATH=/workspaces/NetAlertX/test:/workspaces/NetAlertX/server:/app:/app/server:/opt/venv/lib/python3.12/site-packages
 
 # Install common tools, create user, and set up sudo
-RUN apk add --no-cache git nano vim jq php83-pecl-xdebug py3-pip nodejs sudo gpgconf && \
+RUN apk add --no-cache git nano vim jq php83-pecl-xdebug py3-pip nodejs sudo gpgconf pytest pytest-cov && \
     adduser -D -s /bin/sh netalertx && \
     addgroup netalertx nginx && \
     addgroup netalertx www-data && \
@@ -37,6 +41,9 @@ RUN set -e; \
     mkdir -p /run/openrc; \
     chown netalertx:nginx /run/openrc/; \
     rm -Rf /run/openrc/*;
+
+# setup pytest
+RUN sudo /opt/venv/bin/python -m pip install -U pytest pytest-cov
 
 WORKDIR /workspaces/NetAlertX
 

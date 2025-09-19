@@ -1,4 +1,8 @@
 #! /bin/bash
+# Runtime setup for devcontainer (executed after container starts).
+# Prefer building setup into resources/devcontainer-Dockerfile when possible.
+# Use this script for runtime-only adjustments (permissions, sockets, ownership,
+# and services managed without init) that are difficult at build time.
 id
 
 # Define variables (paths, ports, environment)

@@ -23,11 +23,26 @@
         "ms-azuretools.vscode-docker",
         "felixfbecker.php-debug",
         "bmewburn.vscode-intelephense-client",
-        "xdebug.php-debug"
+        "xdebug.php-debug",
+        "ms-python.vscode-pylance",
+        "pamaron.pytest-runner"
       ]
       ,
       "settings": {
-        "terminal.integrated.cwd": "${containerWorkspaceFolder}"
+        "terminal.integrated.cwd": "${containerWorkspaceFolder}",
+        // Python testing configuration
+        "python.testing.pytestEnabled": true,
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestArgs": [
+          "test"
+        ],
+        // Make sure we discover tests and import server correctly
+        "python.analysis.extraPaths": [
+          "/workspaces/NetAlertX",
+          "/workspaces/NetAlertX/server",
+          "/app",
+          "/app/server"
+        ]
       }
     }
   },
