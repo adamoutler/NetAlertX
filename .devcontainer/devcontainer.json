@@ -10,6 +10,8 @@
 
   "runArgs": [
     "--privileged",
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
     // Ensure containers can resolve host.docker.internal to the host (required on Linux)
     "--add-host=host.docker.internal:host-gateway"
   ],
@@ -25,7 +27,9 @@
         "bmewburn.vscode-intelephense-client",
         "xdebug.php-debug",
         "ms-python.vscode-pylance",
-        "pamaron.pytest-runner"
+        "pamaron.pytest-runner",
+        "coderabbit.coderabbit-vscode",
+        "ms-python.black-formatter"
       ]
       ,
       "settings": {

@@ -43,13 +43,7 @@
     {
       "label": "Start Backend (Python)",
       "type": "shell",
-      // Minimal: start backend under debugpy with absolute paths so cwd quirks don't matter.
-      // 1. Kill existing python3
-      // 2. Short delay
-      // 3. Exec debugpy directly referencing /app/server/__main__.py
-      // 4. Run detached (nohup + setsid) so task can exit cleanly without killing process.
-      //    Use exec to avoid extra shell layer; append marker file for quick verification.
-      "command": "/workspace/NetAlertX/.devcontainer/scripts/restart-backend.sh",
+      "command": "/workspaces/NetAlertX/.devcontainer/scripts/restart-backend.sh",
       "presentation": {
         "echo": true,
         "reveal": "always",
@@ -66,7 +60,7 @@
     {
       "label": "Start Frontend (nginx and PHP-FPM)",
       "type": "shell",
-      "command": "killall php-fpm83 nginx 2>/dev/null || true; sleep 1; php-fpm83 && nginx",
+      "command": "killall php-fpm83 nginx 2>/dev/null || true; sleep 1; php-fpm83 & nginx",
       "presentation": {
         "echo": true,
         "reveal": "always",

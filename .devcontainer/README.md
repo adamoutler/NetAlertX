@@ -16,7 +16,7 @@ Common workflows (F1->Tasks: Run Task)
 - Regenerate the devcontainer Dockerfile: Run the VS Code task "Generate Dockerfile" or execute `.devcontainer/scripts/generate-dockerfile.sh`. The result is `.devcontainer/Dockerfile`.
 - Re-run startup provisioning: Use the task "Re-Run Startup Script" to execute `.devcontainer/scripts/setup.sh` in the container.
 - Start services:
-  - Backend (GraphQL/Flask): `.devcontainer/scripts/restart-backend.sh` starts it under debugpy and logs to `/app/log/app_stdout.log` and `/app/log/app_stderr.log`.
+  - Backend (GraphQL/Flask): `.devcontainer/scripts/restart-backend.sh` starts it under debugpy and logs to `/app/log/app.log`
   - Frontend (nginx + PHP-FPM): Started via setup.sh; can be restarted by the task "Start Frontend (nginx and PHP-FPM)".
 
 Testing

@@ -2,7 +2,7 @@
 # Stream NetAlertX logs to stdout so the Dev Containers output channel shows them.
 # This script waits briefly for the files to appear and then tails them with -F.
 
-LOG_FILES="/var/log/php/php-fpm.stdout.log /var/log/nginx/error.log /app/log/app.log /app/log/app_stdout.log /app/log/app_stderr.log"
+LOG_FILES="/app/log/app.log  /app/log/db_is_locked.log /app/log/execution_queue.log /app/log/app_front.log /app/log/app.php_errors.log /app/log/IP_changes.log /app/stderr.log /app/stdout.log"
 
 wait_for_files() {
   # Wait up to ~10s for at least one of the files to exist
