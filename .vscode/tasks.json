@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-  "label": "Rebuild Dockerfile",
+  "label": "Generate Dockerfile",
       "type": "shell",
       "command": "${workspaceFolder:NetAlertX}/.devcontainer/scripts/generate-dockerfile.sh",
       "presentation": {
@@ -27,7 +27,7 @@
       }
     },
     {
-  "label": "Run Setup Script",
+  "label": "Re-Run Startup Script",
       "type": "shell",
       "command": "${workspaceFolder:NetAlertX}/.devcontainer/scripts/setup.sh",
       "presentation": {
@@ -42,24 +42,9 @@
         "color": "terminal.ansiBlue"
       }
     },
+
     {
-  "label": "Start NetAlertX Services",
-      "type": "shell",
-      "command": "sh -c '${workspaceFolder:NetAlertX}/.devcontainer/scripts/setup.sh'",
-      "presentation": {
-        "echo": true,
-        "reveal": "always",
-        "panel": "shared",
-        "showReuseMessage": false
-      },
-      "problemMatcher": [],
-      "icon": {
-        "id": "play",
-        "color": "terminal.ansiGreen"
-      }
-    },
-    {
-      "label": "Restart GraphQL",
+      "label": "Start Backend (Python)",
       "type": "shell",
       // Minimal: start backend under debugpy with absolute paths so cwd quirks don't matter.
       // 1. Kill existing python3
@@ -67,7 +52,7 @@
       // 3. Exec debugpy directly referencing /app/server/__main__.py
       // 4. Run detached (nohup + setsid) so task can exit cleanly without killing process.
       //    Use exec to avoid extra shell layer; append marker file for quick verification.
-      "command": "sudo killall python3 2>/dev/null || true; sleep 0.3; mkdir -p /app/log; setsid nohup python3 -m debugpy --listen 0.0.0.0:5678 /app/server/__main__.py > /app/log/app_stdout.log 2> /app/log/app_stderr.log & echo $! > /app/log/app_backend.pid; echo 'NetAlertX backend restarted (PID '$(cat /app/log/app_backend.pid)')'; sleep 1",
+      "command": "/workspace/NetAlertX/.devcontainer/scripts/restart-backend.sh",
       "presentation": {
         "echo": true,
         "reveal": "always",
@@ -78,11 +63,11 @@
       "problemMatcher": [],
       "icon": {
         "id": "debug-restart",
-        "color": "terminal.ansiYellow"
+        "color": "terminal.ansiGreen"
       }
     },
     {
-      "label": "Restart Nginx and PHP-FPM",
+      "label": "Start Frontend (nginx and PHP-FPM)",
       "type": "shell",
       "command": "killall php-fpm83 nginx 2>/dev/null || true; sleep 1; php-fpm83 && nginx",
       "presentation": {
@@ -95,11 +80,11 @@
       "problemMatcher": [],
       "icon": {
         "id": "debug-restart",
-        "color": "terminal.ansiYellow"
+        "color": "terminal.ansiGreen"
       }
     },
     {
-  "label": "Stop NetAlertX Services",
+  "label": "Stop Frontend & Backend Services",
       "type": "shell",
       "command": "pkill -f 'php-fpm83|nginx|crond|python3' || true",
       "presentation": {

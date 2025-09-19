@@ -2,7 +2,7 @@
 # This stage uses the result of the stage above as its starting point.
 
 FROM runner AS devcontainer
-ENV INSTALL_DIR=/app
+ENV INSTALL_DIR=/app PYTHONPATH=/workspace/NetAlertX:/app
 
 # Install common tools, create user, and set up sudo
 RUN apk add --no-cache git nano vim jq php83-pecl-xdebug py3-pip nodejs sudo gpgconf && \
@@ -33,8 +33,10 @@ RUN set -e; \
     sed -i 's|^error_log .*|error_log /dev/stderr warn;|' /etc/nginx/nginx.conf; \
     sed -i 's|^access_log .*|access_log /dev/stdout main;|' /etc/nginx/nginx.conf; \
     sed -i 's|error_log .*|error_log /dev/stderr warn;|g' /etc/nginx/http.d/*.conf 2>/dev/null || true; \
-    sed -i 's|access_log .*|access_log /dev/stdout main;|g' /etc/nginx/http.d/*.conf 2>/dev/null || true;
-
+    sed -i 's|access_log .*|access_log /dev/stdout main;|g' /etc/nginx/http.d/*.conf 2>/dev/null || true; \
+    mkdir -p /run/openrc; \
+    chown netalertx:nginx /run/openrc/; \
+    rm -Rf /run/openrc/*;
 
 WORKDIR /workspaces/NetAlertX
 

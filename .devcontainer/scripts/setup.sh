@@ -119,7 +119,7 @@ start_services() {
     touch /app/log/app_stdout.log /app/log/app_stderr.log || true
     # Start the server from the server package directory so imports like `import conf` resolve
 
-    /workspaces/NetAlertX/.devcontainer/scripts/start-graphql.sh
+    /workspaces/NetAlertX/.devcontainer/scripts/restart-backend.sh
     # Run the package entrypoint directly to set the proper module path
     # Start the app using the system python3 directly
     
