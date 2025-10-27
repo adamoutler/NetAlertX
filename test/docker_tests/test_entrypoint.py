@@ -1,3 +1,66 @@
+import time
+import subprocess
+import uuid
+import pytest
+
+IMAGE = "netalertx-test"
+
+@pytest.mark.docker
+def test_all_services_startup():
+    """
+    Start the container and check for the startup lines of all 4 services:
+    - php-fpm
+    - crond
+    - python3
+    - nginx
+    Only the starting line prefix is checked, not the full command.
+    The test stops after all are detected or after 10 seconds max.
+    """
+    name = f"netalertx-test-allservices-{uuid.uuid4().hex[:8]}".lower()
+    cmd = [
+        "docker", "run", "--rm", "--name", name,
+        "--network", "host", "--userns", "host",
+        "--tmpfs", "/app/log:mode=777",
+        "--tmpfs", "/app/api:mode=777",
+        "--tmpfs", "/services/config/nginx/conf.active:mode=777",
+        "--tmpfs", "/services/run:mode=777",
+        "--tmpfs", "/tmp:mode=777",
+        "--cap-add", "NET_RAW", "--cap-add", "NET_ADMIN", "--cap-add", "NET_BIND_SERVICE",
+        IMAGE
+    ]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    found = {"php-fpm": False, "crond": False, "python3": False, "nginx": False}
+    start_time = time.time()
+    try:
+        while True:
+            if proc.stdout is None:
+                break
+            line = proc.stdout.readline()
+            if not line:
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.1)
+                continue
+            if "Starting /usr/sbin/php-fpm" in line:
+                found["php-fpm"] = True
+            if "Starting /usr/sbin/crond" in line:
+                found["crond"] = True
+            if "Starting python3" in line:
+                found["python3"] = True
+            if "Starting /usr/sbin/nginx" in line:
+                found["nginx"] = True
+            if all(found.values()):
+                proc.terminate()
+                break
+            if time.time() - start_time > 5:
+                proc.terminate()
+                break
+    finally:
+        try:
+            proc.wait(timeout=7)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    assert all(found.values()), f"Not all service startup lines found: {found}"
 '''
 Tests for the NetAlertX entrypoint.sh script.
 
