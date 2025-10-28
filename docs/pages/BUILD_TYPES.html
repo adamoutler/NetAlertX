@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetAlertX Builds: Choose Your Path</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 500px;
+                max-height: 500px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-12">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl md:text-5xl font-bold text-[#00A0B0] mb-4">NetAlertX Builds: Choose Your Path</h1>
+            <p class="text-xl text-gray-600 max-w-3xl mx-auto">NetAlertX provides different installation methods for different needs. This guide helps you choose the right path for security, experimentation, or development.</p>
+        </header>
+
+        <main>
+            <section id="comparison" class="mb-16">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    
+                    <div class="bg-white rounded-lg shadow-xl p-6 border-t-8 border-[#00A0B0]">
+                        <h2 class="text-2xl font-bold mb-4 text-[#00A0B0]">1. Hardened Appliance</h2>
+                        <span class="inline-block bg-[#00A0B0] text-white text-sm font-semibold px-3 py-1 rounded-full mb-4">Default Production</span>
+                        
+                        <h3 class="font-bold text-lg mb-2">Who is this for?</h3>
+                        <p class="mb-4">All users who want a stable, secure, "set-it-and-forget-it" appliance.</p>
+                        
+                        <h3 class="font-bold text-lg mb-2">Methodology</h3>
+                        <ul class="list-disc list-inside mb-4 space-y-1 text-gray-700">
+                            <li>Multi-stage Alpine build</li>
+                            <li>Aggressively "amputated"</li>
+                            <li>Locked down for max security</li>
+                        </ul>
+
+                        <h3 class="font-bold text-lg mb-2">Source</h3>
+                        <p class="mb-4 font-mono bg-gray-100 p-2 rounded text-sm">Dockerfile (hardened target)</p>
+                        
+                        <div class="bg-[#00A0B0] text-white p-4 rounded-lg text-center">
+                            <span class="text-2xl font-bold">Use this image if:</span>
+                            <p class="text-lg">You want to <strong class="uppercase">use</strong> NetAlertX securely.</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-xl p-6 border-t-8 border-[#EB6841]">
+                        <h2 class="text-2xl font-bold mb-4 text-[#EB6841]">2. "Tinkerer's" Image</h2>
+                        <span class="inline-block bg-[#EB6841] text-white text-sm font-semibold px-3 py-1 rounded-full mb-4">Insecure VM-Style</span>
+                        
+                        <h3 class="font-bold text-lg mb-2">Who is this for?</h3>
+                        <p class="mb-4">Power users, developers, and "tinkerers" wanting a familiar "VM-like" experience.</p>
+                        
+                        <h3 class="font-bold text-lg mb-2">Methodology</h3>
+                        <ul class="list-disc list-inside mb-4 space-y-1 text-gray-700">
+                            <li>Traditional Debian build</li>
+                            <li>Includes full un-hardened OS</li>
+                            <li>Contains `apt`, `sudo`, `git`</li>
+                        </ul>
+
+                        <h3 class="font-bold text-lg mb-2">Source</h3>
+                        <p class="mb-4 font-mono bg-gray-100 p-2 rounded text-sm">Dockerfile.debian</p>
+                        
+                        <div class="bg-[#EB6841] text-white p-4 rounded-lg text-center">
+                            <span class="text-2xl font-bold">Use this image if:</span>
+                            <p class="text-lg">You want to <strong class="uppercase">experiment</strong> with NetAlertX.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow-xl p-6 border-t-8 border-[#EDC951]">
+                        <h2 class="text-2xl font-bold mb-4 text-[#EDC951]">3. Contributor's Devcontainer</h2>
+                        <span class="inline-block bg-[#EDC951] text-gray-800 text-sm font-semibold px-3 py-1 rounded-full mb-4">Project Developers</span>
+                        
+                        <h3 class="font-bold text-lg mb-2">Who is this for?</h3>
+                        <p class="mb-4">Project contributors who are actively writing and debugging code for NetAlertX.</p>
+                        
+                        <h3 class="font-bold text-lg mb-2">Methodology</h3>
+                        <ul class="list-disc list-inside mb-4 space-y-1 text-gray-700">
+                            <li>Builds `FROM runner` stage</li>
+                            <li>Loaded by VS Code</li>
+                            <li>Full debug tools: `xdebug`, `pytest`</li>
+                        </ul>
+
+                        <h3 class="font-bold text-lg mb-2">Source</h3>
+                        <p class="mb-4 font-mono bg-gray-100 p-2 rounded text-sm">Dockerfile (devcontainer target)</p>
+                        
+                        <div class="bg-[#EDC951] text-gray-800 p-4 rounded-lg text-center">
+                            <span class="text-2xl font-bold">Use this image if:</span>
+                            <p class="text-lg">You want to <strong class="uppercase">develop</strong> NetAlertX itself.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="chart" class="mb-16">
+                <div class="bg-white rounded-lg shadow-xl p-6 md:p-8">
+                    <h2 class="text-3xl font-bold text-center mb-2">Visualizing the Trade-Offs</h2>
+                    <p class="text-center text-gray-600 mb-8 max-w-2xl mx-auto">This chart compares the three builds across key attributes. A higher score means "more of" that attribute. Notice the clear trade-offs between security and development features.</p>
+                    <div class="chart-container">
+                        <canvas id="buildsRadarChart"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <section id="flowchart" class="mb-16">
+                <div class="bg-white rounded-lg shadow-xl p-6 md:p-8">
+                    <h2 class="text-3xl font-bold text-center mb-2">Build Process & Origins</h2>
+                    <p class="text-center text-gray-600 mb-8 max-w-2xl mx-auto">The final images originate from two different files and build paths. The main `Dockerfile` uses stages to create *both* the hardened and development container images.</p>
+                    
+                    <div class="flex flex-col md:flex-row justify-center gap-8">
+                        
+                        <div class="flex-1">
+                            <h3 class="text-xl font-bold text-center mb-4">Official Build Path</h3>
+                            <div class="p-4 bg-gray-50 rounded-lg">
+                                <div class="bg-white p-4 rounded-lg shadow text-center font-mono">
+                                    Dockerfile
+                                </div>
+                                
+                                <div class="flex justify-center my-4">
+                                    <span class="text-2xl text-gray-500">↓</span>
+                                </div>
+
+                                <div class="bg-white p-4 rounded-lg shadow text-center font-mono">
+                                    builder (Stage 1)
+                                </div>
+
+                                <div class="flex justify-center my-4">
+                                    <span class="text-2xl text-gray-500">↓</span>
+                                </div>
+                                
+                                <div class="bg-white p-4 rounded-lg shadow text-center font-mono">
+                                    runner (Stage 2)
+                                </div>
+                                
+                                <div class="flex justify-center mt-4">
+                                    <div class="w-1/2 h-px bg-gray-300"></div>
+                                    <div class="w-1/2 h-px bg-gray-300"></div>
+                                </div>
+                                <div class="flex justify-between text-center text-2xl text-gray-500">
+                                    <span>↓</span>
+                                    <span>↓</span>
+                                </div>
+
+                                <div class="flex gap-4">
+                                    <div class_A="flex-1 bg-[#00A0B0] text-white p-4 rounded-lg shadow text-center">
+                                        <h4 class="font-bold">hardened (Final Stage)</h4>
+                                        <p class="text-sm">(Production Image)</p>
+                                    </div>
+                                    <div class="flex-1 bg-[#EDC951] text-gray-800 p-4 rounded-lg shadow text-center">
+                                        <h4 class="font-bold">devcontainer (Final Stage)</h4>
+                                        <p class="text-sm">(Developer Image)</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex-1">
+                            <h3 class="text-xl font-bold text-center mb-4">Legacy Build Path</h3>
+                            <div class="p-4 bg-gray-50 rounded-lg">
+                                <div class="bg-white p-4 rounded-lg shadow text-center font-mono">
+                                    Dockerfile.debian
+                                </div>
+                                
+                                <div class="flex justify-center my-4">
+                                    <span class="text-2xl text-gray-500">↓</span>
+                                </div>
+                                
+                                <div class="bg-[#EB6841] text-white p-4 rounded-lg shadow text-center">
+                                    <h4 class="font-bold">"Tinkerer's" Image</h4>
+                                    <p class="text-sm">(Insecure VM-Style Image)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <footer class="text-center text-gray-500 text-sm mt-12">
+            <p>A single-page infographic generated based on the NetAlertX project documentation.</p>
+        </footer>
+    </div>
+
+    <script>
+        (function() {
+            const ctx = document.getElementById('buildsRadarChart').getContext('2d');
+            
+            const tooltipTitleCallback = (tooltipItems) => {
+                const item = tooltipItems[0];
+                let label = item.chart.data.labels[item.dataIndex];
+                if (Array.isArray(label)) {
+                    return label.join(' ');
+                } else {
+                    return label;
+                }
+            };
+            
+            const chartData = {
+                labels: [
+                    'Security',
+                    ['Production', 'Ready'],
+                    'Attack Surface',
+                    ['Ease of Use', '(Tinkering)'],
+                    'Dev Tools'
+                ],
+                datasets: [
+                    {
+                        label: 'Hardened Appliance',
+                        data: [10, 10, 1, 2, 1],
+                        backgroundColor: 'rgba(0, 160, 176, 0.2)',
+                        borderColor: 'rgba(0, 160, 176, 1)',
+                        pointBackgroundColor: 'rgba(0, 160, 176, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(0, 160, 176, 1)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Tinkerer\'s Image',
+                        data: [2, 2, 9, 10, 8],
+                        backgroundColor: 'rgba(235, 104, 65, 0.2)',
+                        borderColor: 'rgba(235, 104, 65, 1)',
+                        pointBackgroundColor: 'rgba(235, 104, 65, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(235, 104, 65, 1)',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Devcontainer',
+                        data: [3, 1, 8, 8, 10],
+                        backgroundColor: 'rgba(237, 201, 81, 0.2)',
+                        borderColor: 'rgba(237, 201, 81, 1)',
+                        pointBackgroundColor: 'rgba(237, 201, 81, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(237, 201, 81, 1)',
+                        borderWidth: 2
+                    }
+                ]
+            };
+
+            const chartOptions = {
+                maintainAspectRatio: false,
+                responsive: true,
+                scales: {
+                    r: {
+                        angleLines: {
+                            color: '#ddd'
+                        },
+                        grid: {
+                            color: '#ddd'
+                        },
+                        pointLabels: {
+                            font: {
+                                size: 13,
+                                weight: 'bold'
+                            },
+                            color: '#333'
+                        },
+                        ticks: {
+                            backdropColor: 'rgba(255, 255, 255, 0.75)',
+                            backdropPadding: 5,
+                            color: '#555',
+                            stepSize: 2,
+                            font: {
+                                size: 11
+                            }
+                        },
+                        min: 0,
+                        max: 10
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            title: tooltipTitleCallback
+                        }
+                    },
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            font: {
+                                size: 14,
+                                weight: '600'
+                            }
+                        }
+                    }
+                }
+            };
+
+            new Chart(ctx, {
+                type: 'radar',
+                data: chartData,
+                options: chartOptions
+            });
+        })();
+    </script>
+</body>
+</html>
