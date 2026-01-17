@@ -334,7 +334,16 @@ def importConfigs(pm, db, all_plugins):
         "[]",
         "General",
     )
-    conf.VERSION = ccd(
+        conf.FLASK_DEBUG = ccd(
+        "FLASK_DEBUG",
+        False,
+        c_d,
+        "Flask debug mode",
+        '{"dataType": "boolean","elements": [{"elementType": "input","elementOptions": [{ "type": "checkbox" }],"transformers": []}]}',
+        "[]",
+        "General",
+    )
+conf.VERSION = ccd(
         "VERSION",
         "",
         c_d,
