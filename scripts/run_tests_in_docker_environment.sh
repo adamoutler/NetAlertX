@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# run_docker_tests.sh
+# run_tests_in_docker_environment.sh
 #
 # This script automates the entire process of testing the application
 # within its intended, privileged devcontainer environment. It is

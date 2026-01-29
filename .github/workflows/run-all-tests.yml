@@ -61,7 +61,7 @@ jobs:
 
       - name: Run Docker Integration Script
         run: |
-          chmod +x ./test/docker_tests/run_docker_tests.sh
+          chmod +x ./scripts/run_tests_in_docker_environment.sh
 
           # We update the pytest command to use the specific paths built above.
           # Note: We still keep your 'not' filter to skip E2E tests unless you want them.
@@ -70,9 +70,9 @@ jobs:
 
           echo "🚀 Targeted Pytest Command: $SED_COMMAND"
 
-          sed -i "s|pytest -m 'not (docker or compose or feature_complete)'|$SED_COMMAND|g" ./test/docker_tests/run_docker_tests.sh
+          sed -i "s|pytest -m 'not (docker or compose or feature_complete)'|$SED_COMMAND|g" ./scripts/run_tests_in_docker_environment.sh
 
-          ./test/docker_tests/run_docker_tests.sh
+          ./scripts/run_tests_in_docker_environment.sh
 
       - name: Cleanup
         if: always()
