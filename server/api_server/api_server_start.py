@@ -95,12 +95,15 @@ from .openapi.schemas import (  # noqa: E402 [flake8 lint suppression]
     DbQueryUpdateRequest, DbQueryDeleteRequest,
     AddToQueueRequest, GetSettingResponse,
     RecentEventsRequest, SetDeviceAliasRequest,
+    LoginRequest, LoginResponse,
 )
 
 from .sse_endpoint import (  # noqa: E402 [flake8 lint suppression]
     create_sse_endpoint
 )
 # tools and mcp routes have been moved into this module (api_server_start)
+
+from auth.manager import AuthManager  # noqa: E402 [flake8 lint suppression]
 
 # Flask application
 app = Flask(__name__)
@@ -1931,6 +1934,59 @@ def sync_endpoint_post(payload=None):
 def check_auth(payload=None):
     if request.method == "GET":
         return jsonify({"success": True, "message": "Authentication check successful"}), 200
+
+
+@app.route("/api/auth/login", methods=["POST"])
+@validate_request(
+    operation_id="api_auth_login",
+    summary="Login",
+    description=(
+        "Validate username and password against the configured auth provider "
+        "(local SHA-256 hash or LDAP/Active Directory).  "
+        "This endpoint is intentionally unauthenticated — it is the authentication "
+        "step itself.  "
+        "NOTE: to protect against brute-force, call this endpoint only from "
+        "server-side code (PHP login page) rather than directly from the browser."
+    ),
+    request_model=LoginRequest,
+    response_model=LoginResponse,
+    tags=["auth"],
+    # No auth_callable — this endpoint is intentionally public
+)
+def api_auth_login(payload=None):
+    """Authenticate a user and return provider + username on success."""
+    data = payload
+    username = data.username if data else ""
+    password = data.password if data else ""
+
+    if not username or not password:
+        return jsonify({
+            "success": False,
+            "message": "Missing credentials",
+            "error": "username and password are required",
+        }), 400
+
+    _auth_manager = AuthManager()
+    result = _auth_manager.authenticate(username, password)
+
+    if result.success:
+        return jsonify({
+            "success": True,
+            "message": "Authentication successful",
+            "username": result.username,
+            "provider": result.provider,
+        }), 200
+
+    # Log failed attempts for visibility — mirrors existing is_authorized() pattern
+    write_notification(
+        f"[auth] Failed login attempt for user '{username}'",
+        "alert",
+    )
+    return jsonify({
+        "success": False,
+        "message": "Invalid credentials",
+        "error": "Authentication failed",
+    }), 401
 
 
 # Remember Me is now implemented via cookies only (no API endpoints required)
