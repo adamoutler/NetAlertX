@@ -40,7 +40,13 @@ class LocalProvider(AuthProvider):
             mylog("verbose", ["[auth.local] SETPWD_password is not set"])
             return AuthResult.fail(self.name, "Local password not configured")
 
-        incoming_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()
+        # NOTE: SHA-256 is used here purely to *replicate* the legacy PHP hash
+        # comparison (``hash('sha256', $password)``).  The hash is computed by
+        # the PHP login page and stored in SETPWD_password; this code only
+        # verifies it — it does NOT use SHA-256 to *store* a new password.
+        # Replacing this with bcrypt/Argon2 would require a coordinated change
+        # to the PHP side and is tracked separately.
+        incoming_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()  # nosec B324
 
         if hmac.compare_digest(stored_hash.lower(), incoming_hash.lower()):
             return AuthResult.ok(username or "admin", self.name)

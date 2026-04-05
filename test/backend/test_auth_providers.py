@@ -187,12 +187,20 @@ class TestLdapProvider:
     def test_user_password_wrong(self):
         from auth.ldap_provider import LdapProvider
         provider = LdapProvider()
-        ldap3_mock, _, _ = self._make_ldap3_mock(user_bind_success=False)
 
-        with patch.dict("sys.modules", {"ldap3": ldap3_mock}):
+        ldap3 = MagicMock()
+        ldap3.SIMPLE = "SIMPLE"
+        ldap3.AUTO_BIND_NONE = "AUTO_BIND_NONE"
+
+        user_conn = MagicMock()
+        user_conn.bind.return_value = False
+        user_conn.result = {"description": "invalidCredentials"}
+        ldap3.Connection.return_value = user_conn
+
+        with patch.dict("sys.modules", {"ldap3": ldap3}):
             provider._read_config = lambda: self._cfg()
             result = provider._bind_as_user(
-                ldap3_mock, MagicMock(), self._cfg(),
+                ldap3, MagicMock(), self._cfg(),
                 "uid=alice,dc=example,dc=com", "alice", "wrong"
             )
         assert result.success is False

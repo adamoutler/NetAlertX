@@ -25,9 +25,9 @@ const DEFAULT_REDIRECT = '/devices.php';
  * Returns true only when the value is literally "true" (case-insensitive).
  */
 $ldap_enabled = false;
-$ldap_port_line = getConfigLine('/^LDAP_enabled.*=/', $configLines);
-if ($ldap_port_line !== null && isset($ldap_port_line[1])) {
-    $ldap_enabled = strtolower(trim($ldap_port_line[1])) === 'true';
+$ldap_enabled_line = getConfigLine('/^LDAP_enabled.*=/', $configLines);
+if ($ldap_enabled_line !== null && isset($ldap_enabled_line[1])) {
+    $ldap_enabled = strtolower(trim($ldap_enabled_line[1])) === 'true';
 }
 
 /**
@@ -139,10 +139,6 @@ if ($nax_WebProtection !== 'true') {
     }
     safe_redirect(append_hash($redirectTo));
 }
-
-/* =====================================================
-   Login Attempt
-===================================================== */
 
 /* =====================================================
    Login Attempt
