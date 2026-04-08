@@ -20,6 +20,7 @@ nav:
         - Docker Updates: UPDATES.md
         - Docker Maintenance: DOCKER_MAINTENANCE.md
       - Docker Startup Troubleshooting:
+        - ARP flux sysctls: docker-troubleshooting/arp-flux-sysctls.md
         - Aufs capabilities: docker-troubleshooting/aufs-capabilities.md
         - Excessive capabilities: docker-troubleshooting/excessive-capabilities.md
         - File permissions: docker-troubleshooting/file-permissions.md
@@ -52,6 +53,7 @@ nav:
       - Advanced guides:
         - Remote Networks: REMOTE_NETWORKS.md
         - Notifications Guide: NOTIFICATIONS.md
+        - Notification Text Templates: NOTIFICATION_TEMPLATES.md
         - Custom PUID/GUID: PUID_PGID_SECURITY.md
         - Name Resolution: NAME_RESOLUTION.md
         - Authelia: AUTHELIA.md
@@ -217,9 +219,11 @@ markdown_extensions:
 plugins:
   - gh-admonitions
   - search
+  - glightbox
 
 # Custom CSS
 extra_css:
   - stylesheets/custom.css
+  - https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css
 
 favicon: /img/netalertx_docs.png

@@ -8,7 +8,6 @@ import pytest
 
 from helper import get_setting_value
 from api_server.api_server_start import app
-from db.db_helper import get_device_conditions
 
 
 @pytest.fixture(scope="session")
@@ -41,6 +40,10 @@ def create_dummy(client, api_token, test_mac):
         "devVendor": "TestVendor",
     }
     client.post(f"/device/{test_mac}", json=payload, headers=auth_headers(api_token))
+
+
+def delete_dummy(client, api_token, test_mac):
+    client.delete("/devices", json={"macs": [test_mac]}, headers=auth_headers(api_token))
 
 
 def test_get_all_devices(client, api_token, test_mac):
@@ -149,53 +152,60 @@ def test_export_import_cycle_base64(client, api_token, test_mac):
 
 
 def test_devices_totals(client, api_token, test_mac):
-    # 1. Create a dummy device
     create_dummy(client, api_token, test_mac)
+    try:
+        # 1. Call the totals endpoint
+        resp = client.get("/devices/totals", headers=auth_headers(api_token))
+        assert resp.status_code == 200
 
-    # 2. Call the totals endpoint
-    resp = client.get("/devices/totals", headers=auth_headers(api_token))
-    assert resp.status_code == 200
+        # 2. Ensure the response is a JSON list
+        data = resp.json
+        assert isinstance(data, list)
 
-    # 3. Ensure the response is a JSON list
-    data = resp.json
-    assert isinstance(data, list)
+        # 3. Verify the response has exactly 6 elements in documented order:
+        # [all, connected, favorites, new, down, archived]
+        expected_length = 6
+        assert len(data) == expected_length, (
+            f"Expected 6 totals (all, connected, favorites, new, down, archived), got {len(data)}"
+        )
 
-    # 4. Dynamically get expected length
-    conditions = get_device_conditions()
-    expected_length = len(conditions)
-    assert len(data) == expected_length
-
-    # 5. Check that at least 1 device exists
-    assert data[0] >= 1  # 'devices' count includes the dummy device
+        # 4. Check that at least 1 device exists (all count includes the dummy device)
+        assert data[0] >= 1  # index 0 = 'all'
+    finally:
+        delete_dummy(client, api_token, test_mac)
 
 
 def test_devices_by_status(client, api_token, test_mac):
-    # 1. Create a dummy device
     create_dummy(client, api_token, test_mac)
+    try:
+        # 1. Request devices by a valid status
+        resp = client.get("/devices/by-status?status=my", headers=auth_headers(api_token))
+        assert resp.status_code == 200
+        data = resp.json
+        assert isinstance(data, list)
+        assert any(d["id"] == test_mac for d in data)
 
-    # 2. Request devices by a valid status
-    resp = client.get("/devices/by-status?status=my", headers=auth_headers(api_token))
-    assert resp.status_code == 200
-    data = resp.json
-    assert isinstance(data, list)
-    assert any(d["id"] == test_mac for d in data)
+        # 2. Request devices with an invalid/unknown status
+        resp_invalid = client.get("/devices/by-status?status=invalid_status", headers=auth_headers(api_token))
+        # Strict validation now returns 422 for invalid status enum values
+        assert resp_invalid.status_code == 422
 
-    # 3. Request devices with an invalid/unknown status
-    resp_invalid = client.get("/devices/by-status?status=invalid_status", headers=auth_headers(api_token))
-    # Strict validation now returns 422 for invalid status enum values
-    assert resp_invalid.status_code == 422
+        # 3. Check favorite formatting if devFavorite = 1
+        # Update dummy device to favorite
+        update_resp = client.post(
+            f"/device/{test_mac}",
+            json={"devFavorite": 1},
+            headers=auth_headers(api_token)
+        )
+        assert update_resp.status_code == 200
+        assert update_resp.json.get("success") is True
 
-    # 4. Check favorite formatting if devFavorite = 1
-    # Update dummy device to favorite
-    client.post(
-        f"/device/{test_mac}",
-        json={"devFavorite": 1},
-        headers=auth_headers(api_token)
-    )
-    resp_fav = client.get("/devices/by-status?status=my", headers=auth_headers(api_token))
-    fav_data = next((d for d in resp_fav.json if d["id"] == test_mac), None)
-    assert fav_data is not None
-    assert "&#9733" in fav_data["title"]
+        resp_fav = client.get("/devices/by-status?status=my", headers=auth_headers(api_token))
+        fav_data = next((d for d in resp_fav.json if d["id"] == test_mac), None)
+        assert fav_data is not None
+        assert "&#9733" in fav_data["title"]
+    finally:
+        delete_dummy(client, api_token, test_mac)
 
 
 def test_delete_test_devices(client, api_token):

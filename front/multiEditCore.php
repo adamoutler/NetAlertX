@@ -2,6 +2,7 @@
   //------------------------------------------------------------------------------
   // check if authenticated
   require_once  $_SERVER['DOCUMENT_ROOT'] . '/php/templates/security.php';
+  require_once $_SERVER['DOCUMENT_ROOT'] . '/php/server/db.php';
   require_once $_SERVER['DOCUMENT_ROOT'] . '/php/templates/language/lang.php';
 ?>
 
@@ -135,7 +136,7 @@
                     inputType,
                     readOnly,
                     isMultiSelect,
-                    isOrdeable,
+                    isOrderable,
                     cssClasses,
                     placeholder,
                     suffix,
@@ -240,8 +241,8 @@
   // Initialize device selectors / pickers fields
   function initDeviceSelectors() {
 
-    // Parse device list
-    devicesList = JSON.parse(getCache('devicesListAll_JSON'));
+    // Parse device list using the shared helper
+    devicesList = parseDeviceCache(getCache('devicesListAll_JSON'));
 
     // Check if the device list exists and is an array
     if (Array.isArray(devicesList)) {

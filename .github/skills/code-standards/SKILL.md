@@ -5,13 +5,15 @@ description: NetAlertX coding standards and conventions. Use this when writing c
 
 # Code Standards
 
-- ask me to review before going to each next step (mention n step out of x)
-- before starting, prepare implementation plan
+- ask me to review before going to each next step (mention n step out of x)  (AI only)
+- before starting, prepare implementation plan  (AI only)
 - ask me to review it and ask any clarifying questions first
 - add test creation as last step - follow repo architecture patterns - do not place in the root of /test
 - code has to be maintainable, no duplicate code
-- follow DRY principle
+- follow DRY principle - maintainability of code is more important than speed of implementation
 - code files should be less than 500 LOC for better maintainability
+- DB columns must not contain underscores, use camelCase instead (e.g., deviceInstanceId, not device_instance_id)
+- treat DB as temporary storage for stats, long term configuration should be stored in the /config folder, the /config folder should allow you to restore most of your functionality (excluding historical data)
 
 ## File Length
 
@@ -64,7 +66,7 @@ Use timeNowUTC(as_string=False) for datetime operations (scheduling, comparisons
 
 ## String Sanitization
 
-Use sanitizers from `server/helper.py` before storing user input.
+Use sanitizers from `server/helper.py` before storing user input. MAC addresses are always lowercased and normalized. IP addresses should be validated.
 
 ## Devcontainer Constraints
 

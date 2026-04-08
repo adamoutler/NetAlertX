@@ -67,42 +67,7 @@ sql_devices_all =   """
                         FROM DevicesView
                     """
 
-sql_appevents = """select * from AppEvents order by DateTimeCreated desc"""
-# The below query calculates counts of devices in various categories:
-#  (connected/online, offline, down, new, archived),
-#  as well as a combined count for devices that match any status listed in the UI_MY_DEVICES setting
-sql_devices_tiles = """
-                        WITH Statuses AS (
-                            SELECT setValue
-                            FROM Settings
-                            WHERE setKey = 'UI_MY_DEVICES'
-                        ),
-                        MyDevicesFilter AS (
-                            SELECT
-                                -- Build a dynamic filter for devices matching any status in UI_MY_DEVICES
-                                devPresentLastScan, devAlertDown, devIsNew, devIsArchived
-                            FROM Devices
-                            WHERE
-                                (instr((SELECT setValue FROM Statuses), 'online') > 0 AND devPresentLastScan = 1) OR
-                                (instr((SELECT setValue FROM Statuses), 'offline') > 0 AND devPresentLastScan = 0 AND devIsArchived = 0) OR
-                                (instr((SELECT setValue FROM Statuses), 'down') > 0 AND devPresentLastScan = 0 AND devAlertDown = 1) OR
-                                (instr((SELECT setValue FROM Statuses), 'new') > 0 AND devIsNew = 1) OR
-                                (instr((SELECT setValue FROM Statuses), 'archived') > 0 AND devIsArchived = 1)
-                        )
-                        SELECT
-                            -- Counts for each individual status
-                            (SELECT COUNT(*) FROM Devices WHERE devPresentLastScan = 1) AS connected,
-                            (SELECT COUNT(*) FROM Devices WHERE devPresentLastScan = 0) AS offline,
-                            (SELECT COUNT(*) FROM Devices WHERE devPresentLastScan = 0 AND devAlertDown = 1) AS down,
-                            (SELECT COUNT(*) FROM Devices WHERE devIsNew = 1) AS new,
-                            (SELECT COUNT(*) FROM Devices WHERE devIsArchived = 1) AS archived,
-                            (SELECT COUNT(*) FROM Devices WHERE devFavorite = 1) AS favorites,
-                            (SELECT COUNT(*) FROM Devices) AS "all",
-                            (SELECT COUNT(*) FROM Devices) AS "all_devices",
-                            -- My Devices count
-                            (SELECT COUNT(*) FROM MyDevicesFilter) AS my_devices
-                        FROM Statuses;
-                    """
+sql_appevents = """select * from AppEvents order by dateTimeCreated desc"""
 sql_devices_filters = """
                     SELECT DISTINCT 'devSite' AS columnName, devSite AS columnValue
                         FROM Devices WHERE devSite NOT IN ('', 'null') AND devSite IS NOT NULL
@@ -141,32 +106,38 @@ sql_devices_filters = """
 
 sql_devices_stats = f"""
                     SELECT
-                        Online_Devices as online,
-                        Down_Devices as down,
-                        All_Devices as 'all',
-                        Archived_Devices as archived,
+                        onlineDevices as online,
+                        downDevices as down,
+                        allDevices as 'all',
+                        archivedDevices as archived,
                         (SELECT COUNT(*) FROM Devices a WHERE devIsNew = 1) as new,
                         (SELECT COUNT(*) FROM Devices a WHERE devName IN ({NULL_EQUIVALENTS_SQL}) OR devName IS NULL) as unknown
                     FROM Online_History
-                    ORDER BY Scan_Date DESC
+                    ORDER BY scanDate DESC
                     LIMIT 1
                     """
-sql_events_pending_alert = "SELECT  * FROM Events where eve_PendingAlertEmail is not 0"
+sql_events_pending_alert = "SELECT  * FROM Events where evePendingAlertEmail is not 0"
+sql_events_all = "SELECT rowid, * FROM Events ORDER BY eveDateTime DESC"
 sql_settings = "SELECT  * FROM Settings"
 sql_plugins_objects = "SELECT  * FROM Plugins_Objects"
+sql_plugins_stats = """SELECT 'objects' AS tableName, plugin, COUNT(*) AS cnt FROM Plugins_Objects GROUP BY plugin
+                       UNION ALL
+                       SELECT 'events',  plugin, COUNT(*) FROM Plugins_Events  GROUP BY plugin
+                       UNION ALL
+                       SELECT 'history', plugin, COUNT(*) FROM Plugins_History  GROUP BY plugin"""
 sql_language_strings = "SELECT  * FROM Plugins_Language_Strings"
 sql_notifications_all = "SELECT  * FROM Notifications"
 sql_online_history = "SELECT  * FROM Online_History"
 sql_plugins_events = "SELECT  * FROM Plugins_Events"
-sql_plugins_history = "SELECT  * FROM Plugins_History ORDER BY DateTimeChanged DESC"
+sql_plugins_history = "SELECT  * FROM Plugins_History ORDER BY dateTimeChanged DESC"
 sql_new_devices = """SELECT * FROM (
-                        SELECT eve_IP as devLastIP,
-                               eve_MAC as devMac,
-                               MAX(eve_DateTime) as lastEvent
+                        SELECT eveIp as devLastIP,
+                               eveMac as devMac,
+                               MAX(eveDateTime) as lastEvent
                         FROM Events_Devices
-                        WHERE eve_PendingAlertEmail = 1
-                        AND eve_EventType = 'New Device'
-                        GROUP BY eve_MAC
+                        WHERE evePendingAlertEmail = 1
+                        AND eveEventType = 'New Device'
+                        GROUP BY eveMac
                         ORDER BY lastEvent
                      ) t1
                      LEFT JOIN

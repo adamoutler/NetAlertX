@@ -526,13 +526,7 @@
         function getVisibleDevicesList()
         {
             // Read cache (skip cookie expiry check)
-            devicesList = getCache('devicesListAll_JSON', true);
-
-            if (devicesList != '') {
-                devicesList = JSON.parse (devicesList);
-            } else {
-                devicesList = [];
-            }
+            devicesList = parseDeviceCache(getCache('devicesListAll_JSON', true));
 
             // only loop thru the filtered down list
             visibleDevices = getCache("ntx_visible_macs")

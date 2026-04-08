@@ -55,6 +55,7 @@
 
 <!-- NetAlertX -->
 <script defer src="js/handle_version.js"></script>
+<script src="js/device-columns.js?v=<?php include 'php/templates/version.php'; ?>"></script>
 <script src="js/ui_components.js?v=<?php include 'php/templates/version.php'; ?>"></script>
 
 

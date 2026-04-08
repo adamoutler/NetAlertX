@@ -10,9 +10,10 @@ import uuid
 
 # Register NetAlertX libraries
 import conf
-from const import fullConfPath, fullConfFolder, default_tz
+from const import fullConfPath, fullConfFolder, default_tz, applicationPath
+from db.db_upgrade import ensure_views
 from helper import getBuildTimeStampAndVersion, collect_lang_strings, updateSubnets, generate_random_string
-from utils.datetime_utils import timeNowUTC
+from utils.datetime_utils import timeNowUTC, ensure_future_datetime
 from app_state import updateState
 from logger import mylog
 from api import update_api
@@ -20,6 +21,31 @@ from scheduler import schedule_class
 from plugin import plugin_manager, print_plugin_info
 from utils.plugin_utils import get_plugins_configs, get_set_value_for_init
 from messaging.in_app import write_notification
+
+# ===============================================================================
+# Language helpers
+# ===============================================================================
+
+_LANGUAGES_JSON = os.path.join(
+    applicationPath, "front", "php", "templates", "language", "language_definitions", "languages.json"
+)
+
+
+def _load_language_display_names():
+    """Return a JSON-serialised list of display names from languages.json.
+
+    Falls back to a hardcoded English-only list on any error so that
+    the settings page is never broken by a missing/corrupt file.
+    """
+    try:
+        with open(_LANGUAGES_JSON, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        names = [entry["display"] for entry in data["languages"]]
+        return json.dumps(names)
+    except Exception as e:
+        mylog("none", [f"[languages] Failed to load languages.json, using fallback: {e}"])
+        return '["English (en_us)"]'
+
 
 # ===============================================================================
 # Initialise user defined values
@@ -178,6 +204,9 @@ def importConfigs(pm, db, all_plugins):
     # rename settings that have changed names due to code cleanup and migration to plugins
     # renameSettings(config_file)
 
+    # rename legacy DB column references in user config values (e.g. templates, WATCH lists)
+    renameColumnReferences(config_file)
+
     fileModifiedTime = os.path.getmtime(config_file)
 
     mylog("debug", ["[Import Config] checking config file "])
@@ -213,7 +242,7 @@ def importConfigs(pm, db, all_plugins):
         [],
         c_d,
         "Loaded plugins",
-        '{"dataType":"array","elements":[{"elementType":"select","elementHasInputValue":1,"elementOptions":[{"multiple":"true","ordeable":"true"}],"transformers":[]},{"elementType":"button","elementOptions":[{"sourceSuffixes":[]},{"separator":""},{"cssClasses":"col-xs-12"},{"onClick":"selectChange(this)"},{"getStringKey":"Gen_Change"}],"transformers":[]}]}',  # noqa: E501
+        '{"dataType":"array","elements":[{"elementType":"select","elementHasInputValue":1,"elementOptions":[{"multiple":"true","orderable":"true"}],"transformers":[]},{"elementType":"button","elementOptions":[{"sourceSuffixes":[]},{"separator":""},{"cssClasses":"col-xs-12"},{"onClick":"selectChange(this)"},{"getStringKey":"Gen_Change"}],"transformers":[]}]}',  # noqa: E501
         "[]",
         "General",
     )
@@ -316,6 +345,15 @@ def importConfigs(pm, db, all_plugins):
         "[]",
         "General",
     )
+    conf.PRAGMA_JOURNAL_SIZE_LIMIT = ccd(
+        "PRAGMA_JOURNAL_SIZE_LIMIT",
+        50,
+        c_d,
+        "WAL size limit (MB)",
+        '{"dataType":"integer", "elements": [{"elementType" : "input", "elementOptions" : [{"type": "number"}] ,"transformers": []}]}',
+        "[]",
+        "General",
+    )
     conf.REFRESH_FQDN = ccd(
         "REFRESH_FQDN",
         False,
@@ -401,7 +439,7 @@ def importConfigs(pm, db, all_plugins):
         c_d,
         "Language Interface",
         '{"dataType":"string", "elements": [{"elementType" : "select", "elementOptions" : [] ,"transformers": []}]}',
-        "['English (en_us)', 'Arabic (ar_ar)', 'Catalan (ca_ca)', 'Czech (cs_cz)', 'German (de_de)', 'Spanish (es_es)', 'Farsi (fa_fa)', 'French (fr_fr)', 'Italian (it_it)', 'Japanese (ja_jp)', 'Norwegian (nb_no)', 'Polish (pl_pl)', 'Portuguese (pt_br)', 'Portuguese (pt_pt)', 'Russian (ru_ru)', 'Swedish (sv_sv)', 'Turkish (tr_tr)', 'Ukrainian (uk_ua)', 'Vietnamese (vi_vn)', 'Chinese (zh_cn)']",   # noqa: E501 - inline JSON
+        _load_language_display_names(),  # derived from languages.json
         "UI",
     )
 
@@ -547,7 +585,7 @@ def importConfigs(pm, db, all_plugins):
 
             #  bulk-import language strings
             sql.executemany(
-                """INSERT INTO Plugins_Language_Strings ("Language_Code", "String_Key", "String_Value", "Extra") VALUES (?, ?, ?, ?)""",
+                """INSERT INTO Plugins_Language_Strings (languageCode, stringKey, stringValue, extra) VALUES (?, ?, ?, ?)""",
                 stringSqlParams,
             )
 
@@ -647,9 +685,12 @@ def importConfigs(pm, db, all_plugins):
             newSchedule = Cron(run_sch).schedule(
                 start_date=timeNowUTC(as_string=False)
             )
+            # Get initial next schedule time, ensuring it's in the future
+            next_schedule_time = ensure_future_datetime(newSchedule, timeNowUTC(as_string=False))
+
             conf.mySchedules.append(
                 schedule_class(
-                    plugin["unique_prefix"], newSchedule, newSchedule.next(), False
+                    plugin["unique_prefix"], newSchedule, next_schedule_time, False
                 )
             )
 
@@ -680,7 +721,7 @@ def importConfigs(pm, db, all_plugins):
             <li> Clear app cache with the <i class="fa-solid fa-rotate"></i> (reload) button in the header</li>\
             <li>Go to Settings and click Save</li> </ol>\
             Check out new features and what has changed in the \
-            <a href="https://github.com/jokob-sk/NetAlertX/releases" target="_blank">📓 release notes</a>.""",
+            <a href="https://github.com/netalertx/NetAlertX/releases" target="_blank">📓 release notes</a>.""",
             'interrupt',
             timeNowUTC()
         )
@@ -697,6 +738,12 @@ def importConfigs(pm, db, all_plugins):
         conf.mySettingsSQLsafe,
     )
 
+    db.commitDB()
+
+    # Rebuild DevicesView now that settings (including NTFPRCS_sleep_time) are committed.
+    # This is the single call site — initDB() deliberately skips it so the view
+    # always gets the real user value, not an empty-Settings fallback.
+    ensure_views(sql)
     db.commitDB()
 
     #  update only the settings datasource
@@ -801,3 +848,85 @@ def renameSettings(config_file):
 
     else:
         mylog("debug", "[Config] No old setting names found in the file. No changes made.")
+
+
+# -------------------------------------------------------------------------------
+# Rename legacy DB column names in user-persisted config values (templates, WATCH lists, etc.)
+# Follows the same backup-and-replace pattern as renameSettings().
+_column_replacements = {
+    # Event columns
+    r"\beve_MAC\b": "eveMac",
+    r"\beve_IP\b": "eveIp",
+    r"\beve_DateTime\b": "eveDateTime",
+    r"\beve_EventType\b": "eveEventType",
+    r"\beve_AdditionalInfo\b": "eveAdditionalInfo",
+    r"\beve_PendingAlertEmail\b": "evePendingAlertEmail",
+    r"\beve_PairEventRowid\b": "evePairEventRowid",
+    r"\beve_PairEventRowID\b": "evePairEventRowid",
+    # Session columns
+    r"\bses_MAC\b": "sesMac",
+    r"\bses_IP\b": "sesIp",
+    r"\bses_DateTimeConnection\b": "sesDateTimeConnection",
+    r"\bses_DateTimeDisconnection\b": "sesDateTimeDisconnection",
+    r"\bses_EventTypeConnection\b": "sesEventTypeConnection",
+    r"\bses_EventTypeDisconnection\b": "sesEventTypeDisconnection",
+    r"\bses_StillConnected\b": "sesStillConnected",
+    r"\bses_AdditionalInfo\b": "sesAdditionalInfo",
+    # Plugin columns (templates + WATCH values)
+    r"\bObject_PrimaryID\b": "objectPrimaryId",
+    r"\bObject_PrimaryId\b": "objectPrimaryId",
+    r"\bObjectPrimaryID\b": "objectPrimaryId",
+    r"\bObject_SecondaryID\b": "objectSecondaryId",
+    r"\bObject_SecondaryId\b": "objectSecondaryId",
+    r"\bObjectSecondaryID\b": "objectSecondaryId",
+    r"\bWatched_Value1\b": "watchedValue1",
+    r"\bWatched_Value2\b": "watchedValue2",
+    r"\bWatched_Value3\b": "watchedValue3",
+    r"\bWatched_Value4\b": "watchedValue4",
+    r"\bDateTimeChanged\b": "dateTimeChanged",
+    r"\bDateTimeCreated\b": "dateTimeCreated",
+    r"\bSyncHubNodeName\b": "syncHubNodeName",
+    # Online_History (in case of API_CUSTOM_SQL)
+    r"\bScan_Date\b": "scanDate",
+    r"\bOnline_Devices\b": "onlineDevices",
+    r"\bDown_Devices\b": "downDevices",
+    r"\bAll_Devices\b": "allDevices",
+    r"\bArchived_Devices\b": "archivedDevices",
+    r"\bOffline_Devices\b": "offlineDevices",
+    # Language strings (unlikely in user config but thorough)
+    r"\bLanguage_Code\b": "languageCode",
+    r"\bString_Key\b": "stringKey",
+    r"\bString_Value\b": "stringValue",
+}
+
+
+def renameColumnReferences(config_file):
+    """Rename legacy DB column references in the user's app.conf file."""
+    contains_old_refs = False
+
+    with open(str(config_file), "r") as f:
+        for line in f:
+            if any(re.search(key, line) for key in _column_replacements):
+                mylog("debug", f"[Config] Old column reference found: ({line.strip()})")
+                contains_old_refs = True
+                break
+
+    if not contains_old_refs:
+        mylog("debug", "[Config] No old column references found in config. No changes made.")
+        return
+
+    timestamp = timeNowUTC(as_string=False).strftime("%Y%m%d%H%M%S")
+    backup_file = f"{config_file}_old_column_names_{timestamp}.bak"
+    mylog("none", f"[Config] Renaming legacy column references — backup: {backup_file}")
+    shutil.copy(str(config_file), backup_file)
+
+    with (
+        open(str(config_file), "r") as original,
+        open(str(config_file) + "_temp", "w") as temp,
+    ):
+        for line in original:
+            for pattern, replacement in _column_replacements.items():
+                line = re.sub(pattern, replacement, line)
+            temp.write(line)
+
+    shutil.move(str(config_file) + "_temp", str(config_file))

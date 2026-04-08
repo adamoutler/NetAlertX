@@ -121,12 +121,12 @@ function loadSessionsData() {
       if (data.success && data.sessions.length) {
         data.sessions.forEach(session => {
           table.row.add([
-            session.ses_DateTimeOrder,
-            session.ses_Connection,
-            session.ses_Disconnection,
-            session.ses_Duration,
-            session.ses_IP,
-            session.ses_Info
+            session.sesDateTimeOrder,
+            session.sesConnection,
+            session.sesDisconnection,
+            session.sesDuration,
+            session.sesIp,
+            session.sesInfo
           ]);
         });
       }

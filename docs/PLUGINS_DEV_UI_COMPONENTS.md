@@ -16,7 +16,7 @@ Each column definition specifies:
 
 ```json
 {
-  "column": "Object_PrimaryID",
+  "column": "objectPrimaryId",
   "mapped_to_column": "devMac",
   "mapped_to_column_data": null,
   "css_classes": "col-sm-2",
@@ -39,7 +39,7 @@ Each column definition specifies:
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `column` | string | **YES** | Source column name from data contract (e.g., `Object_PrimaryID`, `Watched_Value1`) |
+| `column` | string | **YES** | Source column name from data contract (e.g., `objectPrimaryId`, `watchedValue1`) |
 | `mapped_to_column` | string | no | Target database column if mapping to a table like `CurrentScan` |
 | `mapped_to_column_data` | object | no | Static value to map instead of using column data |
 | `css_classes` | string | no | Bootstrap CSS classes for width/spacing (e.g., `"col-sm-2"`, `"col-sm-6"`) |
@@ -64,7 +64,7 @@ Plain text display (read-only).
 
 ```json
 {
-  "column": "Watched_Value1",
+  "column": "watchedValue1",
   "show": true,
   "type": "label",
   "localized": ["name"],
@@ -99,7 +99,7 @@ Resolves an IP address to a MAC address and creates a device link.
 
 ```json
 {
-  "column": "Object_SecondaryID",
+  "column": "objectSecondaryId",
   "show": true,
   "type": "device_ip",
   "localized": ["name"],
@@ -117,7 +117,7 @@ Creates a device link with the target device's name as the link label.
 
 ```json
 {
-  "column": "Object_PrimaryID",
+  "column": "objectPrimaryId",
   "show": true,
   "type": "device_name_mac",
   "localized": ["name"],
@@ -135,7 +135,7 @@ Renders as a clickable HTTP/HTTPS link.
 
 ```json
 {
-  "column": "Watched_Value1",
+  "column": "watchedValue1",
   "show": true,
   "type": "url",
   "localized": ["name"],
@@ -153,7 +153,7 @@ Creates two links (HTTP and HTTPS) as lock icons for the given IP/hostname.
 
 ```json
 {
-  "column": "Object_SecondaryID",
+  "column": "objectSecondaryId",
   "show": true,
   "type": "url_http_https",
   "localized": ["name"],
@@ -207,7 +207,7 @@ Color-codes values based on ranges. Useful for status codes, latency, capacity p
 
 ```json
 {
-  "column": "Watched_Value1",
+  "column": "watchedValue1",
   "show": true,
   "type": "threshold",
   "options": [
@@ -252,7 +252,7 @@ Replaces specific values with display strings or HTML.
 
 ```json
 {
-  "column": "Watched_Value2",
+  "column": "watchedValue2",
   "show": true,
   "type": "replace",
   "options": [
@@ -286,7 +286,7 @@ Applies a regular expression to extract/transform values.
 
 ```json
 {
-  "column": "Watched_Value1",
+  "column": "watchedValue1",
   "show": true,
   "type": "regex",
   "options": [
@@ -310,7 +310,7 @@ Evaluates JavaScript code with access to the column value (use `${value}` or `{v
 
 ```json
 {
-  "column": "Watched_Value1",
+  "column": "watchedValue1",
   "show": true,
   "type": "eval",
   "default_value": "",
@@ -322,7 +322,7 @@ Evaluates JavaScript code with access to the column value (use `${value}` or `{v
 **Example with custom formatting:**
 ```json
 {
-  "column": "Watched_Value1",
+  "column": "watchedValue1",
   "show": true,
   "type": "eval",
   "options": [
@@ -347,7 +347,7 @@ You can chain multiple transformations with dot notation:
 
 ```json
 {
-  "column": "Watched_Value3",
+  "column": "watchedValue3",
   "show": true,
   "type": "regex.url_http_https",
   "options": [
@@ -376,7 +376,7 @@ Use SQL query results to populate dropdown options:
 
 ```json
 {
-  "column": "Watched_Value2",
+  "column": "watchedValue2",
   "show": true,
   "type": "select",
   "options": ["{value}"],
@@ -405,7 +405,7 @@ Use plugin settings to populate options:
 
 ```json
 {
-  "column": "Watched_Value1",
+  "column": "watchedValue1",
   "show": true,
   "type": "select",
   "options": ["{value}"],
@@ -439,7 +439,7 @@ To import plugin data into the device scan pipeline (for notifications, heuristi
   "mapped_to_table": "CurrentScan",
   "database_column_definitions": [
     {
-      "column": "Object_PrimaryID",
+      "column": "objectPrimaryId",
       "mapped_to_column": "scanMac",
       "show": true,
       "type": "device_mac",
@@ -447,7 +447,7 @@ To import plugin data into the device scan pipeline (for notifications, heuristi
       "name": [{"language_code": "en_us", "string": "MAC Address"}]
     },
     {
-      "column": "Object_SecondaryID",
+      "column": "objectSecondaryId",
       "mapped_to_column": "scanLastIP",
       "show": true,
       "type": "device_ip",
@@ -501,7 +501,7 @@ Control which rows are displayed based on filter conditions. Filters are applied
 {
   "data_filters": [
     {
-      "compare_column": "Object_PrimaryID",
+      "compare_column": "objectPrimaryId",
       "compare_operator": "==",
       "compare_field_id": "txtMacFilter",
       "compare_js_template": "'{value}'.toString()",
@@ -545,7 +545,7 @@ When viewing a device detail page, the `txtMacFilter` field is populated with th
 {
   "database_column_definitions": [
     {
-      "column": "Object_PrimaryID",
+      "column": "objectPrimaryId",
       "mapped_to_column": "scanMac",
       "css_classes": "col-sm-2",
       "show": true,
@@ -555,7 +555,7 @@ When viewing a device detail page, the `txtMacFilter` field is populated with th
       "name": [{"language_code": "en_us", "string": "MAC Address"}]
     },
     {
-      "column": "Object_SecondaryID",
+      "column": "objectSecondaryId",
       "mapped_to_column": "scanLastIP",
       "css_classes": "col-sm-2",
       "show": true,
@@ -574,7 +574,7 @@ When viewing a device detail page, the `txtMacFilter` field is populated with th
       "name": [{"language_code": "en_us", "string": "Last Seen"}]
     },
     {
-      "column": "Watched_Value1",
+      "column": "watchedValue1",
       "css_classes": "col-sm-2",
       "show": true,
       "type": "threshold",
@@ -589,7 +589,7 @@ When viewing a device detail page, the `txtMacFilter` field is populated with th
       "name": [{"language_code": "en_us", "string": "HTTP Status"}]
     },
     {
-      "column": "Watched_Value2",
+      "column": "watchedValue2",
       "css_classes": "col-sm-1",
       "show": true,
       "type": "label",

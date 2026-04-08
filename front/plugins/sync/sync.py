@@ -187,9 +187,10 @@ def main():
                     with open(file_path, 'r') as f:
                         data = json.load(f)
                         for device in data['data']:
-                            if device['devMac'] not in unique_mac_addresses:
+                            device['devMac'] = str(device['devMac']).lower()
+                            if device['devMac'].lower() not in unique_mac_addresses:
                                 device['devSyncHubNode'] = syncHubNodeName
-                                unique_mac_addresses.add(device['devMac'])
+                                unique_mac_addresses.add(device['devMac'].lower())
                                 device_data.append(device)
 
                     # Rename the file to "processed_" + current name
@@ -206,7 +207,7 @@ def main():
             # Retrieve existing devMac values from the Devices table
             placeholders = ', '.join('?' for _ in unique_mac_addresses)
             cursor.execute(f'SELECT devMac FROM Devices WHERE devMac IN ({placeholders})', tuple(unique_mac_addresses))
-            existing_mac_addresses = set(row[0] for row in cursor.fetchall())
+            existing_mac_addresses = set(row[0].lower() for row in cursor.fetchall())
 
             # insert devices into the last_result.log and thus CurrentScan table to manage state
             for device in device_data:
@@ -222,13 +223,17 @@ def main():
                         extra       = '',
                         foreignKey  = device['devGUID'])
 
-            # Filter out existing devices
-            new_devices = [device for device in device_data if device['devMac'] not in existing_mac_addresses]
+            # Resolve the actual columns that exist in the Devices table once.
+            # This automatically excludes computed/virtual fields (e.g. devStatus,
+            # devIsSleeping) and 'rowid' without needing a maintained exclusion list.
+            cursor.execute("PRAGMA table_info(Devices)")
+            db_columns = {row[1] for row in cursor.fetchall()}
 
-            #  Remove 'rowid' key if it exists
-            for device in new_devices:
-                device.pop('rowid', None)
-                device.pop('devStatus', None)
+            # Filter out existing devices
+            new_devices = [
+                device for device in device_data
+                if device['devMac'].lower() not in existing_mac_addresses
+            ]
 
             mylog('verbose', [f'[{pluginName}] All devices: "{len(device_data)}"'])
             mylog('verbose', [f'[{pluginName}] New devices: "{len(new_devices)}"'])
@@ -236,13 +241,15 @@ def main():
             # Prepare the insert statement
             if new_devices:
 
-                # creating insert statement, removing 'rowid', 'devStatus' as handled on the target and devStatus is resolved on the fly
-                columns = ', '.join(k for k in new_devices[0].keys() if k not in ['rowid', 'devStatus'])
-                placeholders = ', '.join('?' for k in new_devices[0] if k not in ['rowid', 'devStatus'])
+                # Only keep keys that are real columns in the target DB; computed
+                # or unknown fields are silently dropped regardless of source schema.
+                insert_cols = [k for k in new_devices[0].keys() if k in db_columns]
+                columns = ', '.join(insert_cols)
+                placeholders = ', '.join('?' for _ in insert_cols)
                 sql = f'INSERT INTO Devices ({columns}) VALUES ({placeholders})'
 
-                # Extract values for the new devices
-                values = [tuple(device.values()) for device in new_devices]
+                # Extract only the whitelisted column values for each device
+                values = [tuple(device.get(col) for col in insert_cols) for device in new_devices]
 
                 mylog('verbose', [f'[{pluginName}] Inserting Devices SQL   : "{sql}"'])
                 mylog('verbose', [f'[{pluginName}] Inserting Devices VALUES: "{values}"'])

@@ -30,8 +30,9 @@ six
 urllib3
 httplib2
 gunicorn
-git+https://github.com/foreign-sub/aiofreepybox.git
+freebox-api
 mcp
 psutil
 pydantic>=2.0,<3.0
 ldap3
+fritzconnection>=1.15.1

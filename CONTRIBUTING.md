@@ -1,23 +1,38 @@
-# 🤝 Contributing to NetAlertX
+# Contributing to NetAlertX
 
 First off, **thank you** for taking the time to contribute! NetAlertX is built and improved with the help of passionate people like you.
 
 ---
 
-## 📂 Issues, Bugs, and Feature Requests
+## Issues, Bugs, and Feature Requests
 
-Please use the [GitHub Issue Tracker](https://github.com/jokob-sk/NetAlertX/issues) for:
-- Bug reports 🐞
-- Feature requests 💡
-- Documentation feedback 📖
+Please use the [GitHub Issue Tracker](https://github.com/netalertx/NetAlertX/issues) for:
+- Bug reports
+- Feature requests
+- Documentation feedback
 
 Before opening a new issue:
-- 🛑 [Check Common Issues & Debug Tips](https://docs.netalertx.com/DEBUG_TIPS#common-issues)
-- 🔍 [Search Closed Issues](https://github.com/jokob-sk/NetAlertX/issues?q=is%3Aissue+is%3Aclosed)
+- [Check Common Issues & Debug Tips](https://docs.netalertx.com/DEBUG_TIPS#common-issues)
+- [Search Closed Issues](https://github.com/netalertx/NetAlertX/issues?q=is%3Aissue+is%3Aclosed)
 
 ---
 
-## 🚀 Submitting Pull Requests (PRs)
+## Use of AI
+
+Use of AI-assisted tools is permitted, provided all generated code is reviewed, understood, and verified before submission.
+
+- All AI-generated code must meet the project's **quality, security, and performance standards**.
+- Contributors are responsible for **fully understanding** any code they submit, regardless of how it was produced.
+- Prefer **clarity and maintainability over cleverness or brevity**. Readable code is always favored over dense or obfuscated implementations.
+- Follow the **DRY (Don't Repeat Yourself) principle** where appropriate, without sacrificing readability.
+- Do not submit code that you cannot confidently explain or debug.
+
+All changes must pass the **full test suite** before opening a PR.
+
+
+---
+
+## Submitting Pull Requests (PRs)
 
 We welcome PRs to improve the code, docs, or UI!
 
@@ -28,10 +43,23 @@ Please:
 - Provide a clear title and description for your PR
 - If relevant, add or update tests and documentation
 - For plugins, refer to the [Plugin Dev Guide](https://docs.netalertx.com/PLUGINS_DEV)
+- Switch the PR to DRAFT mode if still being worked on
+- Keep PRs **focused and minimal** — avoid unrelated changes in a single PR
+- PRs that do not meet these guidelines may be closed without review
+
+## Commit Messages
+
+- Use clear, descriptive commit messages
+- Explain *why* a change was made, not just *what* changed
+- Reference related issues where applicable
+
+## Code Quality
+
+- Read and follow the [code standards](/.github/skills/code-standards/SKILL.md)
 
 ---
 
-## 🌟 First-Time Contributors
+## First-Time Contributors
 
 New to open source? Check out these resources:
 - [How to Fork and Submit a PR](https://opensource.guide/how-to-contribute/)
@@ -39,15 +67,15 @@ New to open source? Check out these resources:
 
 ---
 
-## 🔐 Code of Conduct
+## Code of Conduct
 
 By participating, you agree to follow our [Code of Conduct](./CODE_OF_CONDUCT.md), which ensures a respectful and welcoming community.
 
 ---
 
-## 📬 Contact
+## Contact
 
 If you have more in-depth questions or want to discuss contributing in other ways, feel free to reach out at:
-📧 [jokob@duck.com](mailto:jokob@duck.com?subject=NetAlertX%20Contribution)
+[jokob.sk@gmail.com](mailto:jokob.sk@gmail.com?subject=NetAlertX%20Contribution)
 
 We appreciate every contribution, big or small! 💙

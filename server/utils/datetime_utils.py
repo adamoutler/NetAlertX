@@ -6,7 +6,7 @@ import datetime
 import re
 import pytz
 from typing import Union, Optional
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import email.utils
 import conf
 # from const import *
@@ -88,6 +88,61 @@ def get_timezone_offset():
 #  Date and time methods
 # -------------------------------------------------------------------------------
 
+def is_datetime_future(dt, current_threshold=None):
+    """
+    Check if a datetime is strictly in the future.
+
+    Utility for validating that a datetime hasn't already passed.
+    Used after retrieving pre-computed schedule times to ensure they're still valid.
+
+    Args:
+        dt: datetime.datetime object to validate
+        current_threshold: datetime to compare against. If None, uses timeNowUTC(as_string=False)
+
+    Returns:
+        bool: True if dt is in the future, False otherwise
+
+    Examples:
+        if is_datetime_future(next_scan_dt):
+            broadcast_to_frontend(next_scan_dt)
+    """
+    if dt is None:
+        return False
+
+    if current_threshold is None:
+        current_threshold = timeNowUTC(as_string=False)
+
+    return dt > current_threshold
+
+
+def ensure_future_datetime(schedule_obj, current_threshold=None):
+    """
+    Ensure a schedule's next() call returns a datetime strictly in the future.
+
+    Keeps calling .next() until a future time is returned — never raises.
+
+    Args:
+        schedule_obj: A schedule object with a .next() method (e.g., from croniter/APScheduler)
+        current_threshold: datetime to compare against. If None, uses timeNowTZ(as_string=False)
+
+    Returns:
+        datetime.datetime: A guaranteed future datetime from schedule_obj.next()
+
+    Examples:
+        newSchedule = Cron(run_sch).schedule(start_date=timeNowUTC(as_string=False))
+        next_time = ensure_future_datetime(newSchedule)
+    """
+    if current_threshold is None:
+        current_threshold = timeNowTZ(as_string=False)
+
+    next_time = schedule_obj.next()
+
+    while next_time <= current_threshold:
+        next_time = schedule_obj.next()
+
+    return next_time
+
+
 def normalizeTimeStamp(inputTimeStamp):
     """
     Normalize various timestamp formats into a datetime.datetime object.
@@ -154,10 +209,13 @@ def format_date_iso(date_val: str) -> Optional[str]:
         # 2. If it has no timezone, assume it's UTC (our DB storage format)
         #    then CONVERT to user's configured timezone
         if dt.tzinfo is None:
-            # Mark as UTC first
+            # Mark as UTC first — critical: localize() would label without converting
             dt = dt.replace(tzinfo=datetime.UTC)
-            # Convert to user's timezone
-            target_tz = conf.tz if isinstance(conf.tz, datetime.tzinfo) else ZoneInfo(conf.tz)
+            # Resolve target timezone; fall back to UTC if conf.tz is missing/invalid
+            try:
+                target_tz = conf.tz if isinstance(conf.tz, datetime.tzinfo) else ZoneInfo(conf.tz)
+            except (ZoneInfoNotFoundError, ValueError, TypeError):
+                target_tz = datetime.UTC
             dt = dt.astimezone(target_tz)
 
         # 3. Return the string. .isoformat() will now include the +11:00 or +10:00

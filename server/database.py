@@ -10,7 +10,6 @@ from db.db_helper import get_table_json, json_obj
 from workflows.app_events import AppEvent_obj
 from db.db_upgrade import (
     ensure_column,
-    ensure_views,
     ensure_CurrentScan,
     ensure_plugins_tables,
     ensure_Parameters,
@@ -18,6 +17,7 @@ from db.db_upgrade import (
     ensure_Users,
     ensure_Indexes,
     ensure_mac_lowercase_triggers,
+    migrate_to_camelcase,
     migrate_timestamps_to_utc,
 )
 
@@ -76,6 +76,17 @@ class DB:
             # When temp_store is MEMORY (2) temporary tables and indices
             # are kept as if they were in pure in-memory databases.
             self.sql_connection.execute("PRAGMA temp_store=MEMORY;")
+            # WAL size limit: auto-checkpoint when WAL approaches this size,
+            # even if other connections are active. Prevents unbounded WAL growth
+            # on systems with multiple long-lived processes (backend, nginx, PHP-FPM).
+            # User-configurable via PRAGMA_JOURNAL_SIZE_LIMIT setting (default 50 MB).
+            try:
+                from helper import get_setting_value
+                wal_limit_mb = int(get_setting_value("PRAGMA_JOURNAL_SIZE_LIMIT", "50"))
+                wal_limit_bytes = wal_limit_mb * 1000000
+            except Exception:
+                wal_limit_bytes = 50000000  # 50 MB fallback
+            self.sql_connection.execute(f"PRAGMA journal_size_limit={wal_limit_bytes};")
 
             self.sql_connection.text_factory = str
             self.sql_connection.row_factory = sqlite3.Row
@@ -182,6 +193,12 @@ class DB:
                 raise RuntimeError("ensure_column(devParentRelTypeSource) failed")
             if not ensure_column(self.sql, "Devices", "devVlanSource", "TEXT"):
                 raise RuntimeError("ensure_column(devVlanSource) failed")
+            if not ensure_column(self.sql, "Devices", "devCanSleep", "INTEGER"):
+                raise RuntimeError("ensure_column(devCanSleep) failed")
+
+            # CamelCase column migration (must run before UTC migration and
+            # before ensure_plugins_tables which uses IF NOT EXISTS with new names)
+            migrate_to_camelcase(self.sql)
 
             # Settings table setup
             ensure_Settings(self.sql)
@@ -201,8 +218,9 @@ class DB:
             # CurrentScan table setup
             ensure_CurrentScan(self.sql)
 
-            # Views
-            ensure_views(self.sql)
+            # Views are created in importConfigs() after settings are committed,
+            # so NTFPRCS_sleep_time is available when the view is built.
+            # ensure_views is NOT called here.
 
             # Indexes
             ensure_Indexes(self.sql)
@@ -334,5 +352,13 @@ def get_temp_db_connection():
     conn = sqlite3.connect(fullDbPath, timeout=5, isolation_level=None)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA busy_timeout=5000;")  # 5s wait before giving up
+    # Apply user-configured WAL size limit (default 50 MB in initialise.py)
+    try:
+        from helper import get_setting_value
+        wal_limit_mb = int(get_setting_value("PRAGMA_JOURNAL_SIZE_LIMIT", "50"))
+        wal_limit_bytes = wal_limit_mb * 1000000
+    except Exception:
+        wal_limit_bytes = 50000000  # 50 MB fallback
+    conn.execute(f"PRAGMA journal_size_limit={wal_limit_bytes};")
     conn.row_factory = sqlite3.Row
     return conn

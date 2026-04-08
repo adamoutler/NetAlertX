@@ -533,8 +533,12 @@ def print_scan_stats(db):
     SELECT
         (SELECT COUNT(*) FROM CurrentScan) AS devices_detected,
         (SELECT COUNT(*) FROM CurrentScan WHERE NOT EXISTS (SELECT 1 FROM Devices WHERE devMac = scanMac)) AS new_devices,
-        (SELECT COUNT(*) FROM Devices WHERE devAlertDown != 0 AND NOT EXISTS (SELECT 1 FROM CurrentScan WHERE devMac = scanMac)) AS down_alerts,
-        (SELECT COUNT(*) FROM Devices WHERE devAlertDown != 0 AND devPresentLastScan = 1 AND NOT EXISTS (SELECT 1 FROM CurrentScan WHERE devMac = scanMac)) AS new_down_alerts,
+        (SELECT COUNT(*) FROM DevicesView WHERE devAlertDown != 0 AND devIsSleeping = 0 AND NOT EXISTS (SELECT 1 FROM CurrentScan WHERE devMac = scanMac)) AS down_alerts,
+        (SELECT COUNT(*) FROM DevicesView
+            WHERE devAlertDown != 0 AND devCanSleep = 0
+            AND devPresentLastScan = 1
+            AND NOT EXISTS (SELECT 1 FROM CurrentScan WHERE devMac = scanMac)
+        ) AS new_down_alerts,
         (SELECT COUNT(*) FROM Devices WHERE devPresentLastScan = 0) AS new_connections,
         (SELECT COUNT(*) FROM Devices WHERE devPresentLastScan = 1 AND NOT EXISTS (SELECT 1 FROM CurrentScan WHERE devMac = scanMac)) AS disconnections,
                 (SELECT COUNT(*) FROM Devices, CurrentScan
@@ -577,8 +581,8 @@ def print_scan_stats(db):
         row_dict = dict(row)
         mylog("trace", f"    {row_dict}")
 
-    mylog("trace", "   ================ Events table content where eve_PendingAlertEmail = 1  ================",)
-    sql.execute("select * from Events where eve_PendingAlertEmail = 1")
+    mylog("trace", "   ================ Events table content where evePendingAlertEmail = 1  ================",)
+    sql.execute("select * from Events where evePendingAlertEmail = 1")
     rows = sql.fetchall()
     for row in rows:
         row_dict = dict(row)
@@ -607,9 +611,9 @@ def create_new_devices(db):
     mylog("debug", '[New Devices] Insert "New Device" Events')
     query_new_device_events = f"""
     INSERT OR IGNORE INTO Events  (
-        eve_MAC, eve_IP, eve_DateTime,
-        eve_EventType, eve_AdditionalInfo,
-        eve_PendingAlertEmail
+        eveMac, eveIp, eveDateTime,
+        eveEventType, eveAdditionalInfo,
+        evePendingAlertEmail
     )
     SELECT DISTINCT scanMac, scanLastIP, '{startTime}', 'New Device', scanVendor, 1
     FROM CurrentScan
@@ -626,9 +630,9 @@ def create_new_devices(db):
     mylog("debug", "[New Devices] Insert Connection into session table")
 
     sql.execute(f"""INSERT INTO Sessions (
-                        ses_MAC, ses_IP, ses_EventTypeConnection, ses_DateTimeConnection,
-                        ses_EventTypeDisconnection, ses_DateTimeDisconnection,
-                        ses_StillConnected, ses_AdditionalInfo
+                        sesMac, sesIp, sesEventTypeConnection, sesDateTimeConnection,
+                        sesEventTypeDisconnection, sesDateTimeDisconnection,
+                        sesStillConnected, sesAdditionalInfo
                     )
                     SELECT scanMac, scanLastIP, 'Connected', '{startTime}', NULL, NULL, 1, scanVendor
                     FROM CurrentScan
@@ -638,7 +642,7 @@ def create_new_devices(db):
                     )
                     AND NOT EXISTS (
                         SELECT 1 FROM Sessions
-                        WHERE ses_MAC = scanMac AND ses_StillConnected = 1
+                        WHERE sesMac = scanMac AND sesStillConnected = 1
                     )
                     """)
 

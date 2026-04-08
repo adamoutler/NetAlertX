@@ -120,27 +120,27 @@ def pair_sessions_events(db):
 
     mylog("debug", "[Pair Session] - 1 Connections / New Devices")
     sql.execute("""UPDATE Events
-                    SET eve_PairEventRowid =
+                    SET evePairEventRowid =
                        (SELECT ROWID
                         FROM Events AS EVE2
-                        WHERE EVE2.eve_EventType IN ('New Device', 'Connected', 'Down Reconnected',
+                        WHERE EVE2.eveEventType IN ('New Device', 'Connected', 'Down Reconnected',
                             'Device Down', 'Disconnected')
-                           AND EVE2.eve_MAC = Events.eve_MAC
-                           AND EVE2.eve_Datetime > Events.eve_DateTime
-                        ORDER BY EVE2.eve_DateTime ASC LIMIT 1)
-                    WHERE eve_EventType IN ('New Device', 'Connected', 'Down Reconnected')
-                    AND eve_PairEventRowid IS NULL
+                           AND EVE2.eveMac = Events.eveMac
+                           AND EVE2.eveDateTime > Events.eveDateTime
+                        ORDER BY EVE2.eveDateTime ASC LIMIT 1)
+                    WHERE eveEventType IN ('New Device', 'Connected', 'Down Reconnected')
+                    AND evePairEventRowid IS NULL
                  """)
 
     # Pair Disconnection / Device Down
     mylog("debug", "[Pair Session] - 2 Disconnections")
     sql.execute("""UPDATE Events
-                    SET eve_PairEventRowid =
+                    SET evePairEventRowid =
                         (SELECT ROWID
                          FROM Events AS EVE2
-                         WHERE EVE2.eve_PairEventRowid = Events.ROWID)
-                    WHERE eve_EventType IN ('Device Down', 'Disconnected')
-                      AND eve_PairEventRowid IS NULL
+                         WHERE EVE2.evePairEventRowid = Events.ROWID)
+                    WHERE eveEventType IN ('Device Down', 'Disconnected')
+                      AND evePairEventRowid IS NULL
                  """)
 
     mylog("debug", "[Pair Session] Pair session end")
@@ -169,41 +169,61 @@ def insert_events(db):
     sql = db.sql  # TO-DO
     startTime = timeNowUTC()
 
-    # Check device down
-    mylog("debug", "[Events] - 1 - Devices down")
-    sql.execute(f"""INSERT OR IGNORE INTO Events  (eve_MAC, eve_IP, eve_DateTime,
-                        eve_EventType, eve_AdditionalInfo,
-                        eve_PendingAlertEmail)
+    # Check device down – non-sleeping devices (immediate on first absence)
+    mylog("debug", "[Events] - 1a - Devices down (non-sleeping)")
+    sql.execute(f"""INSERT OR IGNORE INTO Events  (eveMac, eveIp, eveDateTime,
+                        eveEventType, eveAdditionalInfo,
+                        evePendingAlertEmail)
                     SELECT devMac, devLastIP, '{startTime}', 'Device Down', '', 1
-                    FROM Devices
+                    FROM DevicesView
                     WHERE devAlertDown != 0
+                      AND devCanSleep = 0
                       AND devPresentLastScan = 1
                       AND NOT EXISTS (SELECT 1 FROM CurrentScan
                                       WHERE devMac = scanMac
                                          ) """)
 
+    # Check device down – sleeping devices whose sleep window has expired
+    mylog("debug", "[Events] - 1b - Devices down (sleep expired)")
+    sql.execute(f"""INSERT OR IGNORE INTO Events  (eveMac, eveIp, eveDateTime,
+                        eveEventType, eveAdditionalInfo,
+                        evePendingAlertEmail)
+                    SELECT devMac, devLastIP, '{startTime}', 'Device Down', '', 1
+                    FROM DevicesView
+                    WHERE devAlertDown != 0
+                      AND devCanSleep = 1
+                      AND devIsSleeping = 0
+                      AND devPresentLastScan = 0
+                      AND NOT EXISTS (SELECT 1 FROM CurrentScan
+                                      WHERE devMac = scanMac)
+                      AND NOT EXISTS (SELECT 1 FROM Events
+                                      WHERE eveMac = devMac
+                                        AND eveEventType = 'Device Down'
+                                        AND eveDateTime >= devLastConnection
+                                         ) """)
+
     # Check new Connections or Down Reconnections
     mylog("debug", "[Events] - 2 - New Connections")
-    sql.execute(f"""    INSERT OR IGNORE INTO Events (eve_MAC, eve_IP, eve_DateTime,
-                                            eve_EventType, eve_AdditionalInfo,
-                                            eve_PendingAlertEmail)
+    sql.execute(f"""    INSERT OR IGNORE INTO Events (eveMac, eveIp, eveDateTime,
+                                            eveEventType, eveAdditionalInfo,
+                                            evePendingAlertEmail)
                         SELECT DISTINCT c.scanMac, c.scanLastIP, '{startTime}',
                                         CASE
-                                            WHEN last_event.eve_EventType = 'Device Down' and  last_event.eve_PendingAlertEmail = 0 THEN 'Down Reconnected'
+                                            WHEN last_event.eveEventType = 'Device Down' and  last_event.evePendingAlertEmail = 0 THEN 'Down Reconnected'
                                             ELSE 'Connected'
                                         END,
                                         '',
                                         1
                         FROM CurrentScan AS c
-                        LEFT JOIN LatestEventsPerMAC AS last_event ON c.scanMac = last_event.eve_MAC
-                        WHERE last_event.devPresentLastScan = 0 OR last_event.eve_MAC IS NULL
+                        LEFT JOIN LatestEventsPerMAC AS last_event ON c.scanMac = last_event.eveMac
+                        WHERE last_event.devPresentLastScan = 0 OR last_event.eveMac IS NULL
                         """)
 
     # Check disconnections
     mylog("debug", "[Events] - 3 - Disconnections")
-    sql.execute(f"""INSERT OR IGNORE INTO Events (eve_MAC, eve_IP, eve_DateTime,
-                        eve_EventType, eve_AdditionalInfo,
-                        eve_PendingAlertEmail)
+    sql.execute(f"""INSERT OR IGNORE INTO Events (eveMac, eveIp, eveDateTime,
+                        eveEventType, eveAdditionalInfo,
+                        evePendingAlertEmail)
                     SELECT devMac, devLastIP, '{startTime}', 'Disconnected', '',
                         devAlertEvents
                     FROM Devices
@@ -215,9 +235,9 @@ def insert_events(db):
 
     # Check IP Changed
     mylog("debug", "[Events] - 4 - IP Changes")
-    sql.execute(f"""INSERT OR IGNORE INTO Events (eve_MAC, eve_IP, eve_DateTime,
-                        eve_EventType, eve_AdditionalInfo,
-                        eve_PendingAlertEmail)
+    sql.execute(f"""INSERT OR IGNORE INTO Events (eveMac, eveIp, eveDateTime,
+                        eveEventType, eveAdditionalInfo,
+                        evePendingAlertEmail)
                     SELECT scanMac, scanLastIP, '{startTime}', 'IP Changed',
                         'Previous IP: '|| devLastIP, devAlertEvents
                     FROM Devices, CurrentScan
@@ -242,8 +262,8 @@ def insertOnlineHistory(db):
         COUNT(*) AS allDevices,
         COALESCE(SUM(CASE WHEN devIsArchived = 1 THEN 1 ELSE 0 END), 0) AS archivedDevices,
         COALESCE(SUM(CASE WHEN devPresentLastScan = 1 THEN 1 ELSE 0 END), 0) AS onlineDevices,
-        COALESCE(SUM(CASE WHEN devPresentLastScan = 0 AND devAlertDown = 1 THEN 1 ELSE 0 END), 0) AS downDevices
-    FROM Devices
+        COALESCE(SUM(CASE WHEN devPresentLastScan = 0 AND devAlertDown = 1 AND devIsSleeping = 0 THEN 1 ELSE 0 END), 0) AS downDevices
+    FROM DevicesView
     """
 
     deviceCounts = db.read(query)[
@@ -259,7 +279,7 @@ def insertOnlineHistory(db):
 
     # Prepare the insert query using parameterized inputs
     insert_query = """
-        INSERT INTO Online_History (Scan_Date, Online_Devices, Down_Devices, All_Devices, Archived_Devices, Offline_Devices)
+        INSERT INTO Online_History (scanDate, onlineDevices, downDevices, allDevices, archivedDevices, offlineDevices)
         VALUES (?, ?, ?, ?, ?, ?)
     """
 

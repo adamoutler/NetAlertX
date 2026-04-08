@@ -42,6 +42,8 @@ from .dbquery_endpoint import read_query, write_query, update_query, delete_quer
 from .sync_endpoint import handle_sync_post, handle_sync_get  # noqa: E402 [flake8 lint suppression]
 from .logs_endpoint import clean_log  # noqa: E402 [flake8 lint suppression]
 from .health_endpoint import get_health_status  # noqa: E402 [flake8 lint suppression]
+from .languages_endpoint import get_languages  # noqa: E402 [flake8 lint suppression]
+from models.plugin_object_instance import PluginObjectInstance  # noqa: E402 [flake8 lint suppression]
 from models.user_events_queue_instance import UserEventsQueueInstance  # noqa: E402 [flake8 lint suppression]
 
 from models.event_instance import EventInstance  # noqa: E402 [flake8 lint suppression]
@@ -96,6 +98,8 @@ from .openapi.schemas import (  # noqa: E402 [flake8 lint suppression]
     AddToQueueRequest, GetSettingResponse,
     RecentEventsRequest, SetDeviceAliasRequest,
     LoginRequest, LoginResponse,
+    LanguagesResponse,
+    PluginStatsResponse,
 )
 
 from .sse_endpoint import (  # noqa: E402 [flake8 lint suppression]
@@ -1751,8 +1755,13 @@ def api_device_sessions(mac, payload=None):
     summary="Get Session Events",
     description="Retrieve events associated with sessions.",
     query_params=[
-        {"name": "type", "description": "Event type", "required": False, "schema": {"type": "string", "default": "all"}},
-        {"name": "period", "description": "Time period", "required": False, "schema": {"type": "string", "default": "7 days"}}
+        {"name": "type",   "description": "Event type",   "required": False, "schema": {"type": "string",  "default": "all"}},
+        {"name": "period", "description": "Time period",  "required": False, "schema": {"type": "string",  "default": "7 days"}},
+        {"name": "page",   "description": "Page number (1-based)", "required": False, "schema": {"type": "integer", "default": 1}},
+        {"name": "limit",  "description": "Rows per page (max 1000)", "required": False, "schema": {"type": "integer", "default": 100}},
+        {"name": "search",  "description": "Free-text search filter",  "required": False, "schema": {"type": "string"}},
+        {"name": "sortCol", "description": "Column index to sort by (0-based)", "required": False, "schema": {"type": "integer", "default": 0}},
+        {"name": "sortDir", "description": "Sort direction: asc or desc",       "required": False, "schema": {"type": "string",  "default": "desc"}}
     ],
     tags=["sessions"],
     auth_callable=is_authorized
@@ -1760,7 +1769,12 @@ def api_device_sessions(mac, payload=None):
 def api_get_session_events(payload=None):
     session_event_type = request.args.get("type", "all")
     period = get_date_from_period(request.args.get("period", "7 days"))
-    return get_session_events(session_event_type, period)
+    page     = request.args.get("page",    1,      type=int)
+    limit    = request.args.get("limit",   100,    type=int)
+    search   = request.args.get("search",  None)
+    sort_col = request.args.get("sortCol", 0,      type=int)
+    sort_dir = request.args.get("sortDir", "desc")
+    return get_session_events(session_event_type, period, page=page, limit=limit, search=search, sort_col=sort_col, sort_dir=sort_dir)
 
 
 # --------------------------
@@ -2016,6 +2030,61 @@ def check_health(payload=None):
             "error": "Failed to retrieve health status",
             "message": "Internal server error"
         }), 500
+
+
+@app.route("/languages", methods=["GET"])
+@validate_request(
+    operation_id="get_languages",
+    summary="Get Supported Languages",
+    description="Returns the canonical list of supported UI languages loaded from languages.json.",
+    response_model=LanguagesResponse,
+    tags=["system", "languages"],
+    auth_callable=is_authorized
+)
+def list_languages(payload=None):
+    """Return the canonical language registry."""
+    try:
+        data = get_languages()
+        return jsonify({"success": True, **data}), 200
+    except FileNotFoundError:
+        return jsonify({
+            "success": False,
+            "error": "languages.json not found",
+            "message": "Language registry file is missing"
+        }), 500
+    except ValueError as e:
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "message": "Language registry file is malformed"
+        }), 500
+
+
+# --------------------------
+# Plugin Stats endpoint
+# --------------------------
+@app.route("/plugins/stats", methods=["GET"])
+@validate_request(
+    operation_id="get_plugin_stats",
+    summary="Get Plugin Row Counts",
+    description="Return per-plugin row counts across Objects, Events, and History tables. Optionally filter by foreignKey (MAC).",
+    response_model=PluginStatsResponse,
+    tags=["plugins"],
+    auth_callable=is_authorized,
+    query_params=[{
+        "name": "foreignKey",
+        "in": "query",
+        "required": False,
+        "description": "Filter counts to rows matching this foreignKey (typically a MAC address)",
+        "schema": {"type": "string"}
+    }]
+)
+def api_plugin_stats(payload=None):
+    """Get per-plugin row counts, optionally filtered by foreignKey."""
+    foreign_key = request.args.get("foreignKey", None)
+    handler = PluginObjectInstance()
+    data = handler.getStats(foreign_key)
+    return jsonify({"success": True, "data": data})
 
 
 # --------------------------

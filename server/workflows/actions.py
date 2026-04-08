@@ -40,10 +40,10 @@ class UpdateFieldAction(Action):
         processed = False
 
         # currently unused
-        if isinstance(obj, dict) and "ObjectGUID" in obj:
+        if isinstance(obj, dict) and "objectGuid" in obj:
             mylog("debug", f"[WF] Updating Object '{obj}' ")
             plugin_instance = PluginObjectInstance()
-            plugin_instance.updateField(obj["ObjectGUID"], self.field, self.value)
+            plugin_instance.updateField(obj["objectGuid"], self.field, self.value)
             processed = True
 
         elif isinstance(obj, dict) and "devGUID" in obj:
@@ -77,10 +77,10 @@ class DeleteObjectAction(Action):
         processed = False
 
         # currently unused
-        if isinstance(obj, dict) and "ObjectGUID" in obj:
+        if isinstance(obj, dict) and "objectGuid" in obj:
             mylog("debug", f"[WF] Updating Object '{obj}' ")
             plugin_instance = PluginObjectInstance()
-            plugin_instance.delete(obj["ObjectGUID"])
+            plugin_instance.delete(obj["objectGuid"])
             processed = True
 
         elif isinstance(obj, dict) and "devGUID" in obj:

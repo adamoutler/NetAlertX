@@ -1,14 +1,14 @@
 # Workflows Overview
 
-The workflows module in allows to automate repetitive tasks, making network management more efficient. Whether you need to assign newly discovered devices to a specific Network Node, auto-group devices from a given vendor, unarchive a device if detected online, or automatically delete devices, this module provides the flexibility to tailor the automations to your needs.
+The workflows module allows to automate repetitive tasks, making network management more efficient. Whether you need to assign newly discovered devices to a specific Network Node, auto-group devices from a given vendor, unarchive a device if detected online, or automatically delete devices, this module provides the flexibility to tailor the automations to your needs.
 
 ![Workflows diagram](./img/WORKFLOWS/workflows_diagram.png)
 
-Below are a few examples that demonstrate how this module can be used to simplify network management tasks.
+You can find a couple of use case examples in [Workflow Examples](WORKFLOW_EXAMPLES.md).
 
 ## Updating Workflows
 
-> [!NOTE] 
+> [!NOTE]
 > In order to apply a workflow change, you must first **Save** the changes and then reload the application by clicking **Restart server**.
 
 ## Workflow components
@@ -25,7 +25,7 @@ Triggers define the event that activates a workflow. They monitor changes to obj
 #### Example Trigger:
 - **Object Type**: `Devices`
 - **Event Type**: `update`
-  
+
 This trigger will activate when a `Device` object is updated.
 
 ### Conditions
@@ -42,7 +42,7 @@ Conditions determine whether a workflow should proceed based on certain criteria
   - **Field**: `devVendor`
   - **Operator**: `contains` (case in-sensitive)
   - **Value**: `Google`
-  
+
   This condition checks if the device's vendor is `Google`. The workflow will only proceed if the condition is true.
 
 ### Actions
@@ -57,7 +57,7 @@ You can include multiple actions that should execute once the conditions are met
 - **Action Type**: `update_field`
   - **Field**: `devIsNew`
   - **Value**: `0`
-  
+
   This action updates the `devIsNew` field to `0`, marking the device as no longer new.
 
 
@@ -67,4 +67,4 @@ You can find a couple of configuration examples in [Workflow Examples](WORKFLOW_
 
 
 > [!TIP]
-> Share your workflows in [Discord](https://discord.com/invite/NczTUTWyRr) or [GitHub Discussions](https://github.com/jokob-sk/NetAlertX/discussions).  
+> Share your workflows in [Discord](https://discord.com/invite/NczTUTWyRr) or [GitHub Discussions](https://github.com/netalertx/NetAlertX/discussions).

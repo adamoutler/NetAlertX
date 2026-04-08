@@ -82,19 +82,28 @@ def cleanup_database(
     # Cleanup Online History
     mylog("verbose", [f"[{pluginName}] Online_History: Delete all but keep latest 150 entries"])
     cursor.execute(
-        """DELETE from Online_History where "Index" not in (
-                            SELECT "Index" from Online_History
-                            order by Scan_Date desc limit 150)"""
+        """DELETE from Online_History where "index" not in (
+                            SELECT "index" from Online_History
+                            order by scanDate desc limit 150)"""
     )
     mylog("verbose", [f"[{pluginName}] Online_History deleted rows: {cursor.rowcount}"])
 
     # -----------------------------------------------------
     # Cleanup Events
     mylog("verbose", f"[{pluginName}] Events: Delete all older than {str(DAYS_TO_KEEP_EVENTS)} days (DAYS_TO_KEEP_EVENTS setting)")
-    sql = f"""DELETE FROM Events WHERE eve_DateTime <= date('now', '-{str(DAYS_TO_KEEP_EVENTS)} day')"""
+    sql = f"""DELETE FROM Events WHERE eveDateTime <= date('now', '-{str(DAYS_TO_KEEP_EVENTS)} day')"""
     mylog("verbose", [f"[{pluginName}] SQL : {sql}"])
     cursor.execute(sql)
     mylog("verbose", [f"[{pluginName}] Events deleted rows: {cursor.rowcount}"])
+
+    # -----------------------------------------------------
+    # Sessions (derived snapshot — trimmed to the same window as Events so the
+    # two tables stay in sync without introducing a separate setting)
+    mylog("verbose", f"[{pluginName}] Sessions: Delete all older than {str(DAYS_TO_KEEP_EVENTS)} days (reuses DAYS_TO_KEEP_EVENTS)")
+    sql = f"""DELETE FROM Sessions WHERE sesDateTimeConnection <= date('now', '-{str(DAYS_TO_KEEP_EVENTS)} day')"""
+    mylog("verbose", [f"[{pluginName}] SQL : {sql}"])
+    cursor.execute(sql)
+    mylog("verbose", [f"[{pluginName}] Sessions deleted rows: {cursor.rowcount}"])
 
     # -----------------------------------------------------
     # Plugins_History
@@ -104,7 +113,7 @@ def cleanup_database(
                                 SELECT "Index"
                                 FROM (
                                     SELECT "Index",
-                                        ROW_NUMBER() OVER(PARTITION BY "Plugin" ORDER BY DateTimeChanged DESC) AS row_num
+                                        ROW_NUMBER() OVER(PARTITION BY plugin ORDER BY dateTimeChanged DESC) AS row_num
                                     FROM Plugins_History
                                 ) AS ranked_objects
                                 WHERE row_num <= {str(PLUGINS_KEEP_HIST)}
@@ -121,7 +130,7 @@ def cleanup_database(
                                SELECT "Index"
                                         FROM (
                                             SELECT "Index",
-                                                ROW_NUMBER() OVER(PARTITION BY "Notifications" ORDER BY DateTimeCreated DESC) AS row_num
+                                                ROW_NUMBER() OVER(PARTITION BY "index" ORDER BY dateTimeCreated DESC) AS row_num
                                             FROM Notifications
                                         ) AS ranked_objects
                                         WHERE row_num <= {histCount}
@@ -138,7 +147,7 @@ def cleanup_database(
                                SELECT "Index"
                                         FROM (
                                             SELECT "Index",
-                                                ROW_NUMBER() OVER(PARTITION BY "AppEvents" ORDER BY DateTimeCreated DESC) AS row_num
+                                                ROW_NUMBER() OVER(PARTITION BY "index" ORDER BY dateTimeCreated DESC) AS row_num
                                             FROM AppEvents
                                         ) AS ranked_objects
                                         WHERE row_num <= {histCount}
@@ -183,10 +192,10 @@ def cleanup_database(
         DELETE FROM Plugins_Objects
         WHERE rowid > (
             SELECT MIN(rowid) FROM Plugins_Objects p2
-            WHERE Plugins_Objects.Plugin = p2.Plugin
-            AND Plugins_Objects.Object_PrimaryID = p2.Object_PrimaryID
-            AND Plugins_Objects.Object_SecondaryID = p2.Object_SecondaryID
-            AND Plugins_Objects.UserData = p2.UserData
+            WHERE Plugins_Objects.plugin = p2.plugin
+            AND Plugins_Objects.objectPrimaryId = p2.objectPrimaryId
+            AND Plugins_Objects.objectSecondaryId = p2.objectSecondaryId
+            AND Plugins_Objects.userData = p2.userData
         )
     """
     )
@@ -199,8 +208,18 @@ def cleanup_database(
     cursor.execute("PRAGMA wal_checkpoint(FULL);")
     mylog("verbose", [f"[{pluginName}] WAL checkpoint executed to truncate file."])
 
+    # Refresh query-planner statistics after bulk deletes so SQLite chooses
+    # the right indexes on the next scan cycle (fixes CPU scaling with DB size)
+    cursor.execute("ANALYZE;")
+    mylog("verbose", [f"[{pluginName}] ANALYZE completed"])
+
     mylog("verbose", [f"[{pluginName}] Shrink Database"])
     cursor.execute("VACUUM;")
+
+    # Lightweight incremental ANALYZE at connection close — near-zero cost,
+    # only re-analyzes tables whose statistics have drifted >25%
+    cursor.execute("PRAGMA optimize;")
+    mylog("verbose", [f"[{pluginName}] PRAGMA optimize completed"])
 
     conn.close()
 
