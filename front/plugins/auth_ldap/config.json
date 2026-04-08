@@ -6,7 +6,11 @@
   "enabled": true,
   "data_source": "template",
   "show_ui": false,
-  "localized": ["display_name", "description", "icon"],
+  "localized": [
+    "display_name",
+    "description",
+    "icon"
+  ],
   "display_name": [
     {
       "language_code": "en_us",
@@ -29,20 +33,29 @@
   "settings": [
     {
       "function": "enabled",
-      "events": ["test"],
+      "events": [
+        "test"
+      ],
       "type": {
         "dataType": "boolean",
         "elements": [
           {
             "elementType": "input",
-            "elementOptions": [{ "type": "checkbox" }],
+            "elementOptions": [
+              {
+                "type": "checkbox"
+              }
+            ],
             "transformers": []
           }
         ]
       },
       "default_value": false,
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -71,7 +84,10 @@
       "maxLength": 253,
       "default_value": "",
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -92,14 +108,21 @@
         "elements": [
           {
             "elementType": "input",
-            "elementOptions": [{ "type": "number" }],
+            "elementOptions": [
+              {
+                "type": "number"
+              }
+            ],
             "transformers": []
           }
         ]
       },
       "default_value": 389,
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -120,14 +143,21 @@
         "elements": [
           {
             "elementType": "input",
-            "elementOptions": [{ "type": "checkbox" }],
+            "elementOptions": [
+              {
+                "type": "checkbox"
+              }
+            ],
             "transformers": []
           }
         ]
       },
       "default_value": false,
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -148,14 +178,21 @@
         "elements": [
           {
             "elementType": "input",
-            "elementOptions": [{ "type": "checkbox" }],
+            "elementOptions": [
+              {
+                "type": "checkbox"
+              }
+            ],
             "transformers": []
           }
         ]
       },
       "default_value": false,
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -170,30 +207,104 @@
       ]
     },
     {
-      "function": "disable_local_admin",
+      "function": "tls_verify_cert",
       "type": {
         "dataType": "boolean",
         "elements": [
           {
             "elementType": "input",
-            "elementOptions": [{ "type": "checkbox" }],
+            "elementOptions": [
+              {
+                "type": "checkbox"
+              }
+            ],
             "transformers": []
           }
         ]
       },
       "default_value": false,
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
-          "string": "Disable local admin account (not recommended)"
+          "string": "Verify TLS Certificate"
         }
       ],
       "description": [
         {
           "language_code": "en_us",
-          "string": "When checked, the local admin account (SETPWD_password) cannot be used as a fallback when LDAP authentication fails."
+          "string": "Require valid TLS certificate from the LDAP server. Default is disabled for self-signed compatibility."
+        }
+      ]
+    },
+    {
+      "function": "ca_cert_path",
+      "type": {
+        "dataType": "string",
+        "elements": [
+          {
+            "elementType": "input",
+            "elementOptions": [],
+            "transformers": []
+          }
+        ]
+      },
+      "maxLength": 512,
+      "default_value": "",
+      "options": [],
+      "localized": [
+        "name",
+        "description"
+      ],
+      "name": [
+        {
+          "language_code": "en_us",
+          "string": "CA Certificate Bundle Path"
+        }
+      ],
+      "description": [
+        {
+          "language_code": "en_us",
+          "string": "Absolute path to a custom CA certificate bundle for validation (e.g. /config/my-ca.pem)."
+        }
+      ]
+    },
+    {
+      "function": "disable_local_admin",
+      "type": {
+        "dataType": "boolean",
+        "elements": [
+          {
+            "elementType": "input",
+            "elementOptions": [
+              {
+                "type": "checkbox"
+              }
+            ],
+            "transformers": []
+          }
+        ]
+      },
+      "default_value": false,
+      "options": [],
+      "localized": [
+        "name",
+        "description"
+      ],
+      "name": [
+        {
+          "language_code": "en_us",
+          "string": "Disable local admin account (Recommended)"
+        }
+      ],
+      "description": [
+        {
+          "language_code": "en_us",
+          "string": "Disable local admin account (Recommended for strict LDAP enforcement, but risks locking you out if the LDAP server goes down)."
         }
       ]
     },
@@ -212,7 +323,10 @@
       "maxLength": 512,
       "default_value": "",
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -233,7 +347,11 @@
         "elements": [
           {
             "elementType": "input",
-            "elementOptions": [{ "type": "password" }],
+            "elementOptions": [
+              {
+                "type": "password"
+              }
+            ],
             "transformers": []
           }
         ]
@@ -241,7 +359,10 @@
       "maxLength": 256,
       "default_value": "",
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -270,7 +391,10 @@
       "maxLength": 512,
       "default_value": "",
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -299,7 +423,10 @@
       "maxLength": 512,
       "default_value": "(uid={username})",
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -328,7 +455,10 @@
       "maxLength": 64,
       "default_value": "uid",
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",
@@ -339,6 +469,38 @@
         {
           "language_code": "en_us",
           "string": "LDAP attribute that holds the login name.  Typically <code>uid</code> for OpenLDAP or <code>sAMAccountName</code> for Active Directory."
+        }
+      ]
+    },
+    {
+      "function": "test_username",
+      "type": {
+        "dataType": "string",
+        "elements": [
+          {
+            "elementType": "input",
+            "elementOptions": [],
+            "transformers": []
+          }
+        ]
+      },
+      "maxLength": 128,
+      "default_value": "",
+      "options": [],
+      "localized": [
+        "name",
+        "description"
+      ],
+      "name": [
+        {
+          "language_code": "en_us",
+          "string": "Test Username"
+        }
+      ],
+      "description": [
+        {
+          "language_code": "en_us",
+          "string": "Optional username to test user resolution and filter. Used by the Test button."
         }
       ]
     },
@@ -355,9 +517,12 @@
         ]
       },
       "maxLength": 512,
-      "default_value": "python3 /app/front/plugins/auth_ldap/test_ldap.py",
+      "default_value": "python3 /app/front/plugins/auth_ldap/test_ldap.py --test-user=\"{LDAP_test_username}\"",
       "options": [],
-      "localized": ["name", "description"],
+      "localized": [
+        "name",
+        "description"
+      ],
       "name": [
         {
           "language_code": "en_us",

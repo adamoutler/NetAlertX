@@ -8,46 +8,76 @@ sys.path.append(f"{INSTALL_PATH}/server")
 from auth.ldap_provider import LdapProvider
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Test LDAP Connection")
+    parser.add_argument("--test-user", help="Optional test username to resolve")
+    args = parser.parse_args()
+
     print("[LDAP Test] Starting LDAP connection test...")
     provider = LdapProvider()
     cfg = provider._read_config()
     
     if not cfg.get("server"):
-        print("[LDAP Test] ERROR: LDAP server not configured")
+        print("[LDAP Test] ❌ ERROR: LDAP server not configured")
         sys.exit(1)
         
     try:
         import ldap3
+        import ssl
+        tls_obj = None
+        if cfg["use_ssl"] or cfg["use_start_tls"]:
+            validate = ssl.CERT_REQUIRED if cfg.get("tls_verify_cert") else ssl.CERT_NONE
+            ca_certs_file = cfg.get("ca_cert_path") if cfg.get("ca_cert_path") else None
+            tls_obj = ldap3.Tls(validate=validate, ca_certs_file=ca_certs_file)
+
         server_obj = ldap3.Server(
             cfg["server"],
             port=cfg["port"],
             use_ssl=cfg["use_ssl"],
+            tls=tls_obj,
             connect_timeout=cfg["timeout"],
             get_info=ldap3.NONE,
         )
         
         print(f"[LDAP Test] Attempting to connect to {cfg['server']}:{cfg['port']}...")
         
-        conn = ldap3.Connection(
-            server_obj,
+        authentication = ldap3.SIMPLE if cfg["bind_dn"] else ldap3.ANONYMOUS
+        conn, bind_success = provider._create_secure_connection(
+            ldap3, server_obj, cfg,
             user=cfg["bind_dn"] or None,
             password=cfg["bind_password"] or None,
-            auto_bind=ldap3.AUTO_BIND_NONE,
-            authentication=ldap3.SIMPLE if cfg["bind_dn"] else ldap3.ANONYMOUS,
+            authentication=authentication
         )
         
-        if cfg["use_start_tls"] and not cfg["use_ssl"]:
-            conn.start_tls()
-        
-        if not conn.bind():
+        if not bind_success:
             print(f"[LDAP Test] ❌ ERROR: Service-account bind failed: {conn.result}")
             sys.exit(1)
             
         print("[LDAP Test] ✅ SUCCESS: Connected to LDAP server and successfully bound with service account.")
-        
-        # Test finding a user if possible, or just unbind.
         print(f"[LDAP Test] Base DN: {cfg['base_dn']}")
         print(f"[LDAP Test] User Filter: {cfg['user_filter']}")
+        
+        if args.test_user:
+            from auth.ldap_provider import _escape_ldap_filter
+            safe_username = _escape_ldap_filter(args.test_user)
+            search_filter = cfg["user_filter"].replace("{username}", safe_username)
+            print(f"[LDAP Test] Searching for user '{args.test_user}' with filter: {search_filter}")
+            
+            conn.search(
+                search_base=cfg["base_dn"],
+                search_filter=search_filter,
+                search_scope=ldap3.SUBTREE,
+                attributes=[cfg["username_attr"]],
+                size_limit=2,
+            )
+            
+            entries = conn.entries
+            if len(entries) == 1:
+                print(f"[LDAP Test] ✅ SUCCESS: Found user DN: {entries[0].entry_dn}")
+            elif len(entries) == 0:
+                print(f"[LDAP Test] ❌ ERROR: User not found")
+            else:
+                print(f"[LDAP Test] ❌ ERROR: Found multiple ({len(entries)}) entries for user")
         
         conn.unbind()
         

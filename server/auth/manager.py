@@ -39,7 +39,7 @@ class AuthManager:
             disable_local = get_setting_value("LDAP_disable_local_admin")
             
             if not setpwd_enabled and not disable_local:
-                mylog("error", ["[auth.manager] LDAP is enabled but SETPWD_enable_password is disabled. Local admin account is still active unless explicitly disabled in LDAP settings (not recommended)."])
+                mylog("warning", ["[auth.manager] LDAP is enabled but SETPWD_enable_password is disabled. Local admin account is still active unless explicitly disabled in LDAP settings (not recommended)."])
 
             mylog("verbose", ["[auth.manager] Trying LDAP provider"])
             ldap_result = LdapProvider().authenticate(username, password)
@@ -48,7 +48,7 @@ class AuthManager:
 
             # Fallback to local admin unless explicitly disabled
             if not disable_local:
-                mylog("verbose", ["[auth.manager] LDAP failed, falling back to local provider"])
+                mylog("warning", ["[auth.manager] LDAP failed, falling back to local provider"])
                 local_result = LocalProvider().authenticate(username, password)
                 if not local_result.success:
                     mylog("verbose", [f"[auth.manager] Authentication failed for user '{username}' via both ldap and local"])

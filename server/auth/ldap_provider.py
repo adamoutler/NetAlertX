@@ -29,6 +29,7 @@ Configuration settings (via NetAlertX plugin ``auth_ldap``)
 from __future__ import annotations
 
 import re
+import ssl
 from typing import Optional
 
 from helper import get_setting_value
@@ -78,10 +79,17 @@ class LdapProvider(AuthProvider):
         if not cfg.get("server"):
             return AuthResult.fail(self.name, "LDAP server not configured")
 
+        tls_obj = None
+        if cfg["use_ssl"] or cfg["use_start_tls"]:
+            validate = ssl.CERT_REQUIRED if cfg["tls_verify_cert"] else ssl.CERT_NONE
+            ca_certs_file = cfg["ca_cert_path"] if cfg["ca_cert_path"] else None
+            tls_obj = ldap3.Tls(validate=validate, ca_certs_file=ca_certs_file)
+
         server_obj = ldap3.Server(
             cfg["server"],
             port=cfg["port"],
             use_ssl=cfg["use_ssl"],
+            tls=tls_obj,
             connect_timeout=cfg["timeout"],
             get_info=ldap3.NONE,
         )
@@ -115,6 +123,27 @@ class LdapProvider(AuthProvider):
             "timeout":      5,
         }
 
+    def _create_secure_connection(self, ldap3, server_obj, cfg: dict, user: Optional[str], password: Optional[str], authentication):
+        """
+        Creates a secure LDAP connection, handling the StartTLS sequence
+        correctly before binding.
+        """
+        conn = ldap3.Connection(
+            server_obj,
+            user=user,
+            password=password,
+            auto_bind=ldap3.AUTO_BIND_NONE,
+            authentication=authentication,
+        )
+
+        if cfg["use_start_tls"] and not cfg["use_ssl"]:
+            conn.start_tls()
+
+        if not conn.bind():
+            return conn, False
+
+        return conn, True
+
     def _resolve_user_dn(self, ldap3, server_obj, cfg: dict, username: str) -> Optional[str]:
         """
         Bind with the service account and search for the user's DN.
@@ -124,21 +153,18 @@ class LdapProvider(AuthProvider):
         safe_username = _escape_ldap_filter(username)
         search_filter = cfg["user_filter"].replace("{username}", safe_username)
 
-        conn = ldap3.Connection(
-            server_obj,
+        authentication = ldap3.SIMPLE if cfg["bind_dn"] else ldap3.ANONYMOUS
+        conn, bind_success = self._create_secure_connection(
+            ldap3, server_obj, cfg,
             user=cfg["bind_dn"] or None,
             password=cfg["bind_password"] or None,
-            auto_bind=ldap3.AUTO_BIND_NONE,
-            authentication=ldap3.SIMPLE if cfg["bind_dn"] else ldap3.ANONYMOUS,
+            authentication=authentication
         )
 
         try:
-            if not conn.bind():
+            if not bind_success:
                 mylog("none", [f"[auth.ldap] Service-account bind failed: {conn.result}"])
                 return None
-
-            if cfg["use_start_tls"] and not cfg["use_ssl"]:
-                conn.start_tls()
 
             conn.search(
                 search_base=cfg["base_dn"],
@@ -169,19 +195,15 @@ class LdapProvider(AuthProvider):
         Attempt to bind as *user_dn* using the supplied *password*.
         A successful bind confirms valid credentials.
         """
-        conn = ldap3.Connection(
-            server_obj,
+        conn, bind_success = self._create_secure_connection(
+            ldap3, server_obj, cfg,
             user=user_dn,
             password=password,
-            auto_bind=ldap3.AUTO_BIND_NONE,
-            authentication=ldap3.SIMPLE,
+            authentication=ldap3.SIMPLE
         )
 
         try:
-            if cfg["use_start_tls"] and not cfg["use_ssl"]:
-                conn.start_tls()
-
-            if conn.bind():
+            if bind_success:
                 return AuthResult.ok(username, self.name)
 
             mylog("verbose", [f"[auth.ldap] User bind failed for DN '{user_dn}': {conn.result}"])
