@@ -29,6 +29,7 @@
   "settings": [
     {
       "function": "enabled",
+      "events": ["test"],
       "type": {
         "dataType": "boolean",
         "elements": [
@@ -165,6 +166,34 @@
         {
           "language_code": "en_us",
           "string": "Upgrade a plain-text LDAP connection to TLS using the STARTTLS command.  Typically used with port 389.  Mutually exclusive with LDAPS."
+        }
+      ]
+    },
+    {
+      "function": "disable_local_admin",
+      "type": {
+        "dataType": "boolean",
+        "elements": [
+          {
+            "elementType": "input",
+            "elementOptions": [{ "type": "checkbox" }],
+            "transformers": []
+          }
+        ]
+      },
+      "default_value": false,
+      "options": [],
+      "localized": ["name", "description"],
+      "name": [
+        {
+          "language_code": "en_us",
+          "string": "Disable local admin account (not recommended)"
+        }
+      ],
+      "description": [
+        {
+          "language_code": "en_us",
+          "string": "When checked, the local admin account (SETPWD_password) cannot be used as a fallback when LDAP authentication fails."
         }
       ]
     },
@@ -312,6 +341,37 @@
           "string": "LDAP attribute that holds the login name.  Typically <code>uid</code> for OpenLDAP or <code>sAMAccountName</code> for Active Directory."
         }
       ]
+    },
+    {
+      "function": "CMD",
+      "type": {
+        "dataType": "string",
+        "elements": [
+          {
+            "elementType": "input",
+            "elementOptions": [],
+            "transformers": []
+          }
+        ]
+      },
+      "maxLength": 512,
+      "default_value": "python3 /app/front/plugins/auth_ldap/test_ldap.py",
+      "options": [],
+      "localized": ["name", "description"],
+      "name": [
+        {
+          "language_code": "en_us",
+          "string": "Command"
+        }
+      ],
+      "description": [
+        {
+          "language_code": "en_us",
+          "string": "Command to run the test script."
+        }
+      ],
+      "show_ui": false
     }
-  ]
+  ],
+  "permissions": {}
 }

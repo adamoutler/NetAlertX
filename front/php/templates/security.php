@@ -66,6 +66,10 @@ $configLines = file(CONFIG_PATH);
 
 // Handle web protection and password
 $nax_WebProtection = strtolower(trim(getConfigLine('/^SETPWD_enable_password.*=/', $configLines)[1] ?? 'false'));
+$ldap_enabled = strtolower(trim(getConfigLine('/^LDAP_enabled.*=/', $configLines)[1] ?? 'false')) === 'true';
+if ($ldap_enabled) {
+    $nax_WebProtection = 'true';
+}
 $nax_Password = getConfigValue('/^SETPWD_password.*=/', $configLines);
 $api_token = getConfigValue('/^API_TOKEN.*=/', $configLines, "'");
 

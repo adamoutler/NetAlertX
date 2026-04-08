@@ -1,6 +1,7 @@
 import threading
 import sys
 import os
+import time
 
 # flake8: noqa: E402
 
@@ -1996,6 +1997,11 @@ def api_auth_login(payload=None):
         f"[auth] Failed login attempt for user '{username}'",
         "alert",
     )
+    
+    # Introduce a delay on failed logins to mitigate rapid brute-force attacks 
+    # that could lock out accounts in upstream directories (like LDAP/AD).
+    time.sleep(3)
+
     return jsonify({
         "success": False,
         "message": "Invalid credentials",

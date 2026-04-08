@@ -247,16 +247,52 @@ class TestAuthManager:
             provider = manager.get_provider()
         assert provider.name == "ldap"
 
-    def test_authenticate_delegates_result(self):
+    def test_authenticate_uses_local_when_ldap_disabled(self):
         from auth.manager import AuthManager
         from auth.base import AuthResult
-        mock_provider = MagicMock()
-        mock_provider.name = "local"
-        mock_provider.authenticate.return_value = AuthResult.ok("admin", "local")
+        
+        manager = AuthManager()
+        with patch("auth.manager.get_setting_value", return_value=False), \
+             patch("auth.manager.LocalProvider.authenticate", return_value=AuthResult.ok("admin", "local")) as mock_auth:
+            result = manager.authenticate("admin", "pass")
+            
+        mock_auth.assert_called_once_with("admin", "pass")
+        assert result.success is True
+
+    def test_authenticate_uses_ldap_when_ldap_enabled(self):
+        from auth.manager import AuthManager
+        from auth.base import AuthResult
+
+        def mock_settings(key):
+            if key == "LDAP_enabled": return True
+            if key == "SETPWD_enable_password": return True
+            if key == "LDAP_disable_local_admin": return True
+            return False
 
         manager = AuthManager()
-        with patch.object(manager, "get_provider", return_value=mock_provider):
+        with patch("auth.manager.get_setting_value", side_effect=mock_settings), \
+             patch("auth.manager.LdapProvider.authenticate", return_value=AuthResult.ok("admin", "ldap")) as mock_auth:
             result = manager.authenticate("admin", "pass")
-
-        mock_provider.authenticate.assert_called_once_with("admin", "pass")
+            
+        mock_auth.assert_called_once_with("admin", "pass")
         assert result.success is True
+
+    def test_authenticate_fallback_to_local(self):
+        from auth.manager import AuthManager
+        from auth.base import AuthResult
+
+        def mock_settings(key):
+            if key == "LDAP_enabled": return True
+            if key == "SETPWD_enable_password": return True
+            if key == "LDAP_disable_local_admin": return False
+            return False
+
+        manager = AuthManager()
+        with patch("auth.manager.get_setting_value", side_effect=mock_settings), \
+             patch("auth.manager.LdapProvider.authenticate", return_value=AuthResult.fail("ldap")), \
+             patch("auth.manager.LocalProvider.authenticate", return_value=AuthResult.ok("admin", "local")) as mock_local_auth:
+            result = manager.authenticate("admin", "pass")
+            
+        mock_local_auth.assert_called_once_with("admin", "pass")
+        assert result.success is True
+        assert result.provider == "local"
