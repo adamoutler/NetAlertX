@@ -36,6 +36,7 @@ from models.notification_instance import NotificationInstance
 from models.user_events_queue_instance import UserEventsQueueInstance
 from scan.device_handling import update_devices_names
 from workflows.manager import WorkflowManager
+from messaging.in_app import write_notification
 
 # ===============================================================================
 # ===============================================================================
@@ -99,7 +100,11 @@ def main():
     renameSettings(Path(fullConfPath))
     # -- SETTINGS BACKWARD COMPATIBILITY END --
 
+    was_idle = False
+
     while True:
+        is_idle_this_loop = True
+
         # re-load user configuration and plugins
         pm, all_plugins, imported = importConfigs(pm, db, all_plugins)
 
@@ -121,6 +126,7 @@ def main():
 
         # proceed if 1 minute passed
         if conf.last_scan_run + datetime.timedelta(minutes=1) < conf.loop_start_time:
+            is_idle_this_loop = False
             # last time any scan or maintenance/upkeep was run
             conf.last_scan_run = loop_start_time
 
@@ -236,6 +242,7 @@ def main():
 
         # Process each new event and check triggers
         if len(new_events) > 0:
+            is_idle_this_loop = False
             updateState("Workflows: Start")
             update_api_flag = False
             for event in new_events:
@@ -259,7 +266,15 @@ def main():
         mylog("debug", [f"[Plugins] Should I update API (userUpdatedDevices): {userUpdatedDevices}"],)
 
         if userUpdatedDevices:
+            is_idle_this_loop = False
             update_api(db, all_plugins, True, ["devices"], userUpdatedDevices)
+
+        if is_idle_this_loop and not was_idle:
+            mylog("verbose", ["[MAIN] System is fully idle. All processes finished."])
+            write_notification("All processes are idle", "info")
+            was_idle = True
+        elif not is_idle_this_loop:
+            was_idle = False
 
         # loop
         time.sleep(5)  # wait for N seconds

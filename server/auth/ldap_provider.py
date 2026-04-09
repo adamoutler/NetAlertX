@@ -95,7 +95,12 @@ class LdapProvider(AuthProvider):
         )
 
         try:
-            user_dn = self._resolve_user_dn(ldap3, server_obj, cfg, username)
+            if cfg.get("direct_bind_format"):
+                safe_username = _escape_ldap_filter(username)
+                user_dn = cfg["direct_bind_format"].replace("{username}", safe_username)
+            else:
+                user_dn = self._resolve_user_dn(ldap3, server_obj, cfg, username)
+
             if user_dn is None:
                 return AuthResult.fail(self.name)
 
@@ -103,7 +108,7 @@ class LdapProvider(AuthProvider):
 
         except Exception as exc:
             mylog("none", [f"[auth.ldap] Unexpected error for user '{username}': {exc}"])
-            return AuthResult.fail(self.name, "LDAP authentication error")
+            raise exc
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -115,6 +120,7 @@ class LdapProvider(AuthProvider):
             "port":         int(get_setting_value("LDAP_port") or 389),
             "use_ssl":      bool(get_setting_value("LDAP_use_ssl")),
             "use_start_tls": bool(get_setting_value("LDAP_use_start_tls")),
+            "direct_bind_format": str(get_setting_value("LDAP_direct_bind_format") or "").strip(),
             "bind_dn":      str(get_setting_value("LDAP_bind_dn") or "").strip(),
             "bind_password": str(get_setting_value("LDAP_bind_password") or "").strip(),
             "base_dn":      str(get_setting_value("LDAP_base_dn") or "").strip(),

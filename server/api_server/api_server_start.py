@@ -1951,6 +1951,10 @@ def check_auth(payload=None):
         return jsonify({"success": True, "message": "Authentication check successful"}), 200
 
 
+FAILED_LOGINS = {}
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_TIME = 900  # 15 minutes
+
 @app.route("/api/auth/login", methods=["POST"])
 @validate_request(
     operation_id="api_auth_login",
@@ -1973,6 +1977,7 @@ def api_auth_login(payload=None):
     data = payload
     username = data.username if data else ""
     password = data.password if data else ""
+    client_ip = request.remote_addr
 
     if not username or not password:
         return jsonify({
@@ -1981,10 +1986,32 @@ def api_auth_login(payload=None):
             "error": "username and password are required",
         }), 400
 
+    # Rate limiting check
+    now = time.time()
+    if client_ip in FAILED_LOGINS:
+        attempts, last_attempt = FAILED_LOGINS[client_ip]
+        if attempts >= MAX_FAILED_ATTEMPTS:
+            if now - last_attempt < LOCKOUT_TIME:
+                write_notification(
+                    f"[auth] Rate limit exceeded for IP {client_ip} trying to log in as '{username}'",
+                    "alert",
+                )
+                return jsonify({
+                    "success": False,
+                    "message": "Too many failed attempts",
+                    "error": "Account or IP temporarily locked out",
+                }), 429
+            else:
+                # Reset after lockout expires
+                FAILED_LOGINS[client_ip] = (0, now)
+
     _auth_manager = AuthManager()
     result = _auth_manager.authenticate(username, password)
 
     if result.success:
+        # Clear failures on success
+        if client_ip in FAILED_LOGINS:
+            del FAILED_LOGINS[client_ip]
         return jsonify({
             "success": True,
             "message": "Authentication successful",
@@ -1994,13 +2021,16 @@ def api_auth_login(payload=None):
 
     # Log failed attempts for visibility — mirrors existing is_authorized() pattern
     write_notification(
-        f"[auth] Failed login attempt for user '{username}'",
+        f"[auth] Failed login attempt for user '{username}' from IP {client_ip}",
         "alert",
     )
     
-    # Introduce a delay on failed logins to mitigate rapid brute-force attacks 
-    # that could lock out accounts in upstream directories (like LDAP/AD).
-    time.sleep(3)
+    # Update rate limiting
+    if client_ip in FAILED_LOGINS:
+        attempts, _ = FAILED_LOGINS[client_ip]
+        FAILED_LOGINS[client_ip] = (attempts + 1, now)
+    else:
+        FAILED_LOGINS[client_ip] = (1, now)
 
     return jsonify({
         "success": False,

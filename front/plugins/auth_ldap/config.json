@@ -237,7 +237,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Require valid TLS certificate from the LDAP server. Default is disabled for self-signed compatibility."
+          "string": "Require valid TLS certificate from the LDAP server. Default is disabled for self-signed compatibility. <br><br><span style=\"color: #cc0000; font-weight: bold;\">⚠ SECURITY WARNING: Leaving this disabled exposes your LDAP credentials to Man-in-the-Middle (MitM) attacks. It is highly recommended to enable this and provide a valid CA certificate in production environments.</span>"
         }
       ]
     },
@@ -305,6 +305,38 @@
         {
           "language_code": "en_us",
           "string": "Disable local admin account (Recommended for strict LDAP enforcement, but risks locking you out if the LDAP server goes down)."
+        }
+      ]
+    },
+    {
+      "function": "direct_bind_format",
+      "type": {
+        "dataType": "string",
+        "elements": [
+          {
+            "elementType": "input",
+            "elementOptions": [],
+            "transformers": []
+          }
+        ]
+      },
+      "maxLength": 512,
+      "default_value": "",
+      "options": [],
+      "localized": [
+        "name",
+        "description"
+      ],
+      "name": [
+        {
+          "language_code": "en_us",
+          "string": "Direct Bind Format (Optional)"
+        }
+      ],
+      "description": [
+        {
+          "language_code": "en_us",
+          "string": "Format for direct binding without a service account. Example: <code>{username}@example.com</code> or <code>uid={username},ou=users,dc=example,dc=com</code>. If set, Bind DN and Search filters are ignored."
         }
       ]
     },

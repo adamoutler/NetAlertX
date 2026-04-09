@@ -42,20 +42,29 @@ class AuthManager:
                 mylog("warning", ["[auth.manager] LDAP is enabled but SETPWD_enable_password is disabled. Local admin account is still active unless explicitly disabled in LDAP settings (not recommended)."])
 
             mylog("verbose", ["[auth.manager] Trying LDAP provider"])
-            ldap_result = LdapProvider().authenticate(username, password)
-            if ldap_result.success:
-                return ldap_result
+            try:
+                ldap_result = LdapProvider().authenticate(username, password)
+                if ldap_result.success:
+                    return ldap_result
 
-            # Fallback to local admin unless explicitly disabled
-            if not disable_local:
-                mylog("warning", ["[auth.manager] LDAP failed, falling back to local provider"])
-                local_result = LocalProvider().authenticate(username, password)
-                if not local_result.success:
-                    mylog("verbose", [f"[auth.manager] Authentication failed for user '{username}' via both ldap and local"])
-                return local_result
-            else:
-                mylog("verbose", [f"[auth.manager] Authentication failed for user '{username}' via ldap (local fallback disabled)"])
+                # LDAP returned failure without exception, which means invalid credentials
+                # We should NOT fallback if the LDAP server explicitly rejected them
+                if not disable_local:
+                    mylog("warning", ["[auth.manager] LDAP explicitly rejected credentials, no fallback to local provider"])
+                else:
+                    mylog("verbose", [f"[auth.manager] Authentication failed for user '{username}' via ldap"])
                 return ldap_result
+            except Exception as e:
+                # Fallback to local admin unless explicitly disabled, because LDAP had an infrastructure/network error
+                if not disable_local:
+                    mylog("warning", [f"[auth.manager] LDAP infrastructure error: {e}. Falling back to local provider"])
+                    local_result = LocalProvider().authenticate(username, password)
+                    if not local_result.success:
+                        mylog("verbose", [f"[auth.manager] Authentication failed for user '{username}' via both ldap and local"])
+                    return local_result
+                else:
+                    mylog("verbose", [f"[auth.manager] LDAP infrastructure error for user '{username}', but local fallback is disabled."])
+                    return AuthResult.fail("ldap", "LDAP infrastructure error")
 
         mylog("verbose", ["[auth.manager] Using local provider"])
         local_result = LocalProvider().authenticate(username, password)
