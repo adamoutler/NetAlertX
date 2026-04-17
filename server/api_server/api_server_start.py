@@ -109,6 +109,7 @@ from .sse_endpoint import (  # noqa: E402 [flake8 lint suppression]
 # tools and mcp routes have been moved into this module (api_server_start)
 
 from auth.manager import AuthManager  # noqa: E402 [flake8 lint suppression]
+from auth.ldap_provider import _sanitize_for_log  # noqa: E402 [flake8 lint suppression]
 
 # Flask application
 app = Flask(__name__)
@@ -142,8 +143,11 @@ if not _cors_origins:
         "http://localhost:20212",
         "http://127.0.0.1:20211",
         "http://127.0.0.1:20212",
-        "*"                          #  Allow all origins as last resort
     ]
+
+if not _cors_origins_env:
+    mylog("warning", ["[API] CORS_ORIGINS not set; restricting to localhost. "
+                       "Set CORS_ORIGINS env var for remote access."])
 
 CORS(
     app,
@@ -1952,8 +1956,17 @@ def check_auth(payload=None):
 
 
 FAILED_LOGINS = {}
+_failed_logins_lock = threading.Lock()
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_TIME = 900  # 15 minutes
+
+
+def _get_client_ip():
+    """Return the real client IP, respecting X-Forwarded-For behind trusted proxies."""
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.remote_addr
 
 @app.route("/api/auth/login", methods=["POST"])
 @validate_request(
@@ -1962,22 +1975,20 @@ LOCKOUT_TIME = 900  # 15 minutes
     description=(
         "Validate username and password against the configured auth provider "
         "(local SHA-256 hash or LDAP/Active Directory).  "
-        "This endpoint is intentionally unauthenticated — it is the authentication "
-        "step itself.  "
-        "NOTE: to protect against brute-force, call this endpoint only from "
-        "server-side code (PHP login page) rather than directly from the browser."
+        "Requires the internal API token as a Bearer header so that only "
+        "server-side callers (e.g. the PHP login page) can reach this endpoint."
     ),
     request_model=LoginRequest,
     response_model=LoginResponse,
     tags=["auth"],
-    # No auth_callable — this endpoint is intentionally public
+    auth_callable=is_authorized,
 )
 def api_auth_login(payload=None):
     """Authenticate a user and return provider + username on success."""
     data = payload
     username = data.username if data else ""
     password = data.password if data else ""
-    client_ip = request.remote_addr
+    client_ip = _get_client_ip()
 
     if not username or not password:
         return jsonify({
@@ -1986,32 +1997,39 @@ def api_auth_login(payload=None):
             "error": "username and password are required",
         }), 400
 
-    # Rate limiting check
+    # Rate limiting check (thread-safe)
     now = time.time()
-    if client_ip in FAILED_LOGINS:
-        attempts, last_attempt = FAILED_LOGINS[client_ip]
-        if attempts >= MAX_FAILED_ATTEMPTS:
-            if now - last_attempt < LOCKOUT_TIME:
-                write_notification(
-                    f"[auth] Rate limit exceeded for IP {client_ip} trying to log in as '{username}'",
-                    "alert",
-                )
-                return jsonify({
-                    "success": False,
-                    "message": "Too many failed attempts",
-                    "error": "Account or IP temporarily locked out",
-                }), 429
-            else:
-                # Reset after lockout expires
-                FAILED_LOGINS[client_ip] = (0, now)
+    with _failed_logins_lock:
+        # Prune stale entries to prevent unbounded memory growth
+        stale = [ip for ip, (_, ts) in FAILED_LOGINS.items() if now - ts > LOCKOUT_TIME]
+        for ip in stale:
+            del FAILED_LOGINS[ip]
+
+        if client_ip in FAILED_LOGINS:
+            attempts, last_attempt = FAILED_LOGINS[client_ip]
+            if attempts >= MAX_FAILED_ATTEMPTS:
+                if now - last_attempt < LOCKOUT_TIME:
+                    write_notification(
+                        f"[auth] Rate limit exceeded for IP {client_ip} trying to log in as '{_sanitize_for_log(username)}'",
+                        "alert",
+                    )
+                    return jsonify({
+                        "success": False,
+                        "message": "Too many failed attempts",
+                        "error": "Account or IP temporarily locked out",
+                    }), 429
+                else:
+                    # Reset after lockout expires
+                    FAILED_LOGINS[client_ip] = (0, now)
 
     _auth_manager = AuthManager()
     result = _auth_manager.authenticate(username, password)
 
     if result.success:
         # Clear failures on success
-        if client_ip in FAILED_LOGINS:
-            del FAILED_LOGINS[client_ip]
+        with _failed_logins_lock:
+            if client_ip in FAILED_LOGINS:
+                del FAILED_LOGINS[client_ip]
         return jsonify({
             "success": True,
             "message": "Authentication successful",
@@ -2021,16 +2039,17 @@ def api_auth_login(payload=None):
 
     # Log failed attempts for visibility — mirrors existing is_authorized() pattern
     write_notification(
-        f"[auth] Failed login attempt for user '{username}' from IP {client_ip}",
+        f"[auth] Failed login attempt for user '{_sanitize_for_log(username)}' from IP {client_ip}",
         "alert",
     )
-    
-    # Update rate limiting
-    if client_ip in FAILED_LOGINS:
-        attempts, _ = FAILED_LOGINS[client_ip]
-        FAILED_LOGINS[client_ip] = (attempts + 1, now)
-    else:
-        FAILED_LOGINS[client_ip] = (1, now)
+
+    # Update rate limiting (thread-safe)
+    with _failed_logins_lock:
+        if client_ip in FAILED_LOGINS:
+            attempts, _ = FAILED_LOGINS[client_ip]
+            FAILED_LOGINS[client_ip] = (attempts + 1, now)
+        else:
+            FAILED_LOGINS[client_ip] = (1, now)
 
     return jsonify({
         "success": False,

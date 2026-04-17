@@ -7,6 +7,10 @@ require_once $_SERVER['DOCUMENT_ROOT'].'/php/server/db.php';
 require_once $_SERVER['DOCUMENT_ROOT'].'/php/templates/language/lang.php';
 require_once $_SERVER['DOCUMENT_ROOT'].'/php/templates/security.php';
 
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 // if (session_status() === PHP_SESSION_NONE) {
 //     session_start();
 // }
@@ -21,13 +25,20 @@ const DEFAULT_REDIRECT = '/devices.php';
 ===================================================== */
 
 /**
- * Read LDAP_enabled from app.conf.
- * Returns true only when the value is literally "true" (case-insensitive).
+ * Read LDAP_enabled from environment or app.conf.
+ * Returns true only when the value is literally "true" (case-insensitive) or "1".
  */
 $ldap_enabled = false;
-$ldap_enabled_line = getConfigLine('/^LDAP_enabled.*=/', $configLines);
-if ($ldap_enabled_line !== null && isset($ldap_enabled_line[1])) {
-    $ldap_enabled = strtolower(trim($ldap_enabled_line[1])) === 'true';
+$env_ldap = getenv('LDAP_ENABLED');
+if ($env_ldap === false) $env_ldap = getenv('LDAP_enabled');
+
+if ($env_ldap !== false && $env_ldap !== '') {
+    $ldap_enabled = strtolower(trim($env_ldap)) === 'true' || trim($env_ldap) === '1';
+} else {
+    $ldap_enabled_line = getConfigLine('/^LDAP_enabled.*=/', $configLines);
+    if ($ldap_enabled_line !== null && isset($ldap_enabled_line[1])) {
+        $ldap_enabled = strtolower(trim($ldap_enabled_line[1])) === 'true';
+    }
 }
 
 /**
@@ -113,8 +124,20 @@ function is_authenticated(): bool {
 }
 
 function login_user(): void {
+    global $nax_Password, $api_token;
     $_SESSION['login'] = 1;
     session_regenerate_id(true);
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+
+    // Set remember-me cookie with HMAC (not raw password hash)
+    $cookie_value = hash_hmac('sha256', $nax_Password, $api_token);
+    setcookie(COOKIE_SAVE_LOGIN_NAME, $cookie_value, [
+        'expires'  => time() + 3600 * 24 * 7,
+        'path'     => '/',
+        'httponly'  => true,
+        'secure'   => !empty($_SERVER['HTTPS']),
+        'samesite' => 'Strict',
+    ]);
 }
 
 
@@ -144,11 +167,13 @@ if ($nax_WebProtection !== 'true') {
    Login Attempt
 ===================================================== */
 
-if (!empty($_POST['loginpassword'])) {
+if (!empty($_POST['loginpassword']) &&
+    isset($_POST['csrf_token']) &&
+    hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'])) {
 
     if ($ldap_enabled) {
         // LDAP path: delegate credential validation to the Python API.
-        // The API runs on loopback only and this endpoint is intentionally public.
+        // The API token is required so only server-side callers can reach the endpoint.
         $ldap_payload = json_encode([
             'username' => isset($_POST['loginusername']) ? trim($_POST['loginusername']) : '',
             'password' => $_POST['loginpassword'],
@@ -156,7 +181,8 @@ if (!empty($_POST['loginpassword'])) {
         $stream_opts = [
             'http' => [
                 'method'        => 'POST',
-                'header'        => "Content-Type: application/json\r\n",
+                'header'        => "Content-Type: application/json\r\n"
+                                 . "Authorization: Bearer " . $api_token . "\r\n",
                 'content'       => $ldap_payload,
                 'timeout'       => 5,
                 'ignore_errors' => true,
@@ -262,6 +288,7 @@ if ($nax_Password === '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923
       <?php endif; ?>
       <div class="form-group has-feedback">
         <input type="hidden" name="url_hash" id="url_hash">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
         <input type="password" class="form-control" placeholder="<?= lang('Login_Psw-box');?>" name="loginpassword">
         <span class="glyphicon glyphicon-lock form-control-feedback"></span>
       </div>

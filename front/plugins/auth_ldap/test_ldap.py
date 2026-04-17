@@ -23,21 +23,8 @@ def main():
         
     try:
         import ldap3
-        import ssl
-        tls_obj = None
-        if cfg["use_ssl"] or cfg["use_start_tls"]:
-            validate = ssl.CERT_REQUIRED if cfg.get("tls_verify_cert") else ssl.CERT_NONE
-            ca_certs_file = cfg.get("ca_cert_path") if cfg.get("ca_cert_path") else None
-            tls_obj = ldap3.Tls(validate=validate, ca_certs_file=ca_certs_file)
-
-        server_obj = ldap3.Server(
-            cfg["server"],
-            port=cfg["port"],
-            use_ssl=cfg["use_ssl"],
-            tls=tls_obj,
-            connect_timeout=cfg["timeout"],
-            get_info=ldap3.NONE,
-        )
+        
+        server_obj = provider._get_server_obj(ldap3, cfg)
         
         print(f"[LDAP Test] Attempting to connect to {cfg['server']}:{cfg['port']}...")
         

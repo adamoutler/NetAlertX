@@ -171,8 +171,8 @@ class TestLdapProvider:
 
         with patch.dict("sys.modules", {"ldap3": ldap3_mock}):
             provider._read_config = lambda: self._cfg()
-            result = provider._resolve_user_dn(ldap3_mock, MagicMock(), self._cfg(), "alice")
-        assert result is None
+            with pytest.raises(ConnectionError):
+                provider._resolve_user_dn(ldap3_mock, MagicMock(), self._cfg(), "alice")
 
     def test_user_not_found_in_ldap(self):
         from auth.ldap_provider import LdapProvider
@@ -289,7 +289,7 @@ class TestAuthManager:
 
         manager = AuthManager()
         with patch("auth.manager.get_setting_value", side_effect=mock_settings), \
-             patch("auth.manager.LdapProvider.authenticate", return_value=AuthResult.fail("ldap")), \
+             patch("auth.manager.LdapProvider.authenticate", return_value=AuthResult.fail("ldap", "User not found")), \
              patch("auth.manager.LocalProvider.authenticate", return_value=AuthResult.ok("admin", "local")) as mock_local_auth:
             result = manager.authenticate("admin", "pass")
             

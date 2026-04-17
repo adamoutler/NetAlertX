@@ -54,7 +54,13 @@ $sessionLogin = isset($_SESSION['login']) ? $_SESSION['login'] : 0;
 // Handle logout
 if (!empty($_REQUEST['action']) && $_REQUEST['action'] == 'logout') {
     session_destroy();
-    setcookie(COOKIE_SAVE_LOGIN_NAME, "", time() - 3600);
+    setcookie(COOKIE_SAVE_LOGIN_NAME, "", [
+        'expires'  => time() - 3600,
+        'path'     => '/',
+        'httponly'  => true,
+        'secure'   => !empty($_SERVER['HTTPS']),
+        'samesite' => 'Strict',
+    ]);
     redirect('index.php');
 }
 
@@ -66,7 +72,17 @@ $configLines = file(CONFIG_PATH);
 
 // Handle web protection and password
 $nax_WebProtection = strtolower(trim(getConfigLine('/^SETPWD_enable_password.*=/', $configLines)[1] ?? 'false'));
-$ldap_enabled = strtolower(trim(getConfigLine('/^LDAP_enabled.*=/', $configLines)[1] ?? 'false')) === 'true';
+
+$ldap_enabled = false;
+$env_ldap = getenv('LDAP_ENABLED');
+if ($env_ldap === false) $env_ldap = getenv('LDAP_enabled');
+
+if ($env_ldap !== false && $env_ldap !== '') {
+    $ldap_enabled = strtolower(trim($env_ldap)) === 'true' || trim($env_ldap) === '1';
+} else {
+    $ldap_enabled = strtolower(trim(getConfigLine('/^LDAP_enabled.*=/', $configLines)[1] ?? 'false')) === 'true';
+}
+
 if ($ldap_enabled) {
     $nax_WebProtection = 'true';
 }
