@@ -67,10 +67,10 @@ services:
 
 **Advanced Active Directory Filter Examples:**
 * Require user to be in a specific group (e.g., `NetAlertX`):
-  ```
+  ```text
   (&(memberOf=CN=NetAlertX,OU=Groups,DC=example,DC=com)(sAMAccountName={username}))
   ```
 * Restrict login to a specific user only (e.g., `my_username`):
-  ```
+  ```text
   (&(sAMAccountName=my_username)(sAMAccountName={username}))
   ```

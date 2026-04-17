@@ -100,7 +100,7 @@ def main():
     renameSettings(Path(fullConfPath))
     # -- SETTINGS BACKWARD COMPATIBILITY END --
 
-    was_idle = False
+    was_idle = True
     last_idle_notification_ts = 0
     IDLE_NOTIFICATION_COOLDOWN_HOURS = 1
 

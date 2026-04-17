@@ -653,11 +653,12 @@ def ensure_Users(sql) -> bool:
             usrID           INTEGER PRIMARY KEY AUTOINCREMENT,
             usrUsername     TEXT NOT NULL UNIQUE COLLATE NOCASE,
             usrPasswordHash TEXT,
-            usrRole         TEXT NOT NULL DEFAULT 'admin',
+            usrRole         TEXT NOT NULL DEFAULT 'admin'
+                                CHECK (usrRole IN ('admin', 'user')),
             usrAuthProvider TEXT NOT NULL DEFAULT 'local',
             usrEnabled      INTEGER NOT NULL DEFAULT 1
                                 CHECK (usrEnabled IN (0, 1)),
-            usrCreatedAt    TEXT NOT NULL,
+            usrCreatedAt    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S','now')),
             usrLastLogin    TEXT
         );
     """)

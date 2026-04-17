@@ -135,7 +135,7 @@ def test_login_no_json_content_type(client):
 
 
 def test_login_endpoint_requires_post(client):
-    """GET /api/auth/login should return 404 (route not registered for GET)."""
+    """GET /api/auth/login should return 405 because the route is POST-only."""
     resp = client.get("/api/auth/login")
-    assert resp.status_code == 404
+    assert resp.status_code == 405
 

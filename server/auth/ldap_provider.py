@@ -166,7 +166,7 @@ class LdapProvider(AuthProvider):
         def get_env_or_setting(key_name: str, default_value, type_cast):
             env_val = os.environ.get(key_name.upper())
             if env_val is not None and env_val != "":
-                if type_cast == bool:
+                if type_cast is bool:
                     return str(env_val).lower() in ("true", "1", "yes")
                 try:
                     return type_cast(env_val)
@@ -176,7 +176,7 @@ class LdapProvider(AuthProvider):
             
             db_val = get_setting_value(key_name)
             if db_val is not None and db_val != "":
-                if type_cast == bool:
+                if type_cast is bool:
                     return str(db_val).lower() in ("true", "1", "yes") if isinstance(db_val, str) else bool(db_val)
                 try:
                     return type_cast(db_val)

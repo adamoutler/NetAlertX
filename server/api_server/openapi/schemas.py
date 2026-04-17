@@ -180,7 +180,9 @@ class LoginResponse(BaseResponse):
     )
 
     username: Optional[str] = Field(None, description="Authenticated username")
-    provider: Optional[str] = Field(None, description="Provider that authenticated the user: 'local' or 'ldap'")
+    provider: Optional[Literal["local", "ldap"]] = Field(
+        None, description="Provider that authenticated the user"
+    )
 
 
 # =============================================================================

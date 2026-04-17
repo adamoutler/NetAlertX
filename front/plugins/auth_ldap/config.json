@@ -549,7 +549,7 @@
         ]
       },
       "maxLength": 512,
-      "default_value": "python3 /app/front/plugins/auth_ldap/test_ldap.py --test-user=\"{LDAP_test_username}\"",
+      "default_value": "python3 /app/front/plugins/auth_ldap/test_ldap.py --test-user={LDAP_test_username}",
       "options": [],
       "localized": [
         "name",
