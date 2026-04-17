@@ -182,11 +182,12 @@ if (!empty($_POST['loginpassword']) &&
             'http' => [
                 'method'        => 'POST',
                 'header'        => "Content-Type: application/json\r\n"
-                                 . "Authorization: Bearer " . $api_token . "\r\n",
+                                 . "Authorization: Bearer " . $api_token . "\r\n"
+                                 . "X-Forwarded-For: " . ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1') . "\r\n",
                 'content'       => $ldap_payload,
                 'timeout'       => 5,
                 'ignore_errors' => true,
-            ],
+            ]
         ];
         $ctx      = stream_context_create($stream_opts);
         $raw      = @file_get_contents($ldap_login_url, false, $ctx);

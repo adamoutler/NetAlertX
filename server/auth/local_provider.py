@@ -31,6 +31,10 @@ class LocalProvider(AuthProvider):
     name = "local"
 
     def authenticate(self, username: str, password: str) -> AuthResult:
+        username = (username or "").strip()
+        if not username:
+            return AuthResult.fail(self.name, "Username must not be empty")
+
         if not password:
             return AuthResult.fail(self.name, "Password must not be empty")
 
@@ -49,6 +53,6 @@ class LocalProvider(AuthProvider):
         incoming_hash = hashlib.sha256(password.encode("utf-8")).hexdigest()  # nosec B324
 
         if hmac.compare_digest(stored_hash.lower(), incoming_hash.lower()):
-            return AuthResult.ok(username or "admin", self.name)
+            return AuthResult.ok(username, self.name)
 
         return AuthResult.fail(self.name)

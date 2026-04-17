@@ -24,8 +24,7 @@ def test_ldap_login_success(driver):
 
     # Verify LDAP username field is present
     username_field = driver.find_elements(By.NAME, "loginusername")
-    if not username_field:
-        pytest.skip("LDAP login fields not present, LDAP might not be configured or enabled.")
+    assert username_field, "LDAP login field not present; LDAP was not configured or rendered."
     
     username_input = username_field[0]
     password_input = driver.find_element(By.NAME, "loginpassword")

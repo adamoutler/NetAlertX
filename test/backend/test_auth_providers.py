@@ -242,7 +242,7 @@ class TestAuthManager:
 
     def test_uses_ldap_when_ldap_enabled(self):
         from auth.manager import AuthManager
-        with patch("auth.manager.get_setting_value", return_value=True):
+        with patch("auth.manager.LdapProvider._read_config", return_value={"enabled": True}):
             manager = AuthManager()
             provider = manager.get_provider()
         assert provider.name == "ldap"
@@ -264,13 +264,12 @@ class TestAuthManager:
         from auth.base import AuthResult
 
         def mock_settings(key):
-            if key == "LDAP_enabled": return True
             if key == "SETPWD_enable_password": return True
-            if key == "LDAP_disable_local_admin": return True
             return False
 
         manager = AuthManager()
-        with patch("auth.manager.get_setting_value", side_effect=mock_settings), \
+        with patch("auth.manager.LdapProvider._read_config", return_value={"enabled": True, "disable_local_admin": True}), \
+             patch("auth.manager.get_setting_value", side_effect=mock_settings), \
              patch("auth.manager.LdapProvider.authenticate", return_value=AuthResult.ok("admin", "ldap")) as mock_auth:
             result = manager.authenticate("admin", "pass")
             
@@ -288,7 +287,8 @@ class TestAuthManager:
             return False
 
         manager = AuthManager()
-        with patch("auth.manager.get_setting_value", side_effect=mock_settings), \
+        with patch("auth.manager.LdapProvider._read_config", return_value={"enabled": True, "disable_local_admin": False}), \
+             patch("auth.manager.get_setting_value", side_effect=mock_settings), \
              patch("auth.manager.LdapProvider.authenticate", return_value=AuthResult.fail("ldap", "User not found")), \
              patch("auth.manager.LocalProvider.authenticate", return_value=AuthResult.ok("admin", "local")) as mock_local_auth:
             result = manager.authenticate("admin", "pass")
@@ -296,3 +296,4 @@ class TestAuthManager:
         mock_local_auth.assert_called_once_with("admin", "pass")
         assert result.success is True
         assert result.provider == "local"
+"local"

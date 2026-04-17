@@ -59,14 +59,19 @@ def main():
             )
             
             entries = conn.entries
+            exit_code = 0
             if len(entries) == 1:
                 print(f"[LDAP Test] ✅ SUCCESS: Found user DN: {entries[0].entry_dn}")
             elif len(entries) == 0:
-                print(f"[LDAP Test] ❌ ERROR: User not found")
+                print("[LDAP Test] ❌ ERROR: User not found")
+                exit_code = 1
             else:
                 print(f"[LDAP Test] ❌ ERROR: Found multiple ({len(entries)}) entries for user")
+                exit_code = 1
         
         conn.unbind()
+        if args.test_user and exit_code:
+            sys.exit(exit_code)
         
     except Exception as e:
         print(f"[LDAP Test] ❌ ERROR: Unexpected error testing LDAP: {e}")

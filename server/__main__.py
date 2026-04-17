@@ -101,6 +101,8 @@ def main():
     # -- SETTINGS BACKWARD COMPATIBILITY END --
 
     was_idle = False
+    last_idle_notification_ts = 0
+    IDLE_NOTIFICATION_COOLDOWN_HOURS = 1
 
     while True:
         is_idle_this_loop = True
@@ -271,7 +273,10 @@ def main():
 
         if is_idle_this_loop and not was_idle:
             mylog("verbose", ["[MAIN] System is fully idle. All processes finished."])
-            write_notification("All processes are idle", "info")
+            now = time.time()
+            if now - last_idle_notification_ts > (IDLE_NOTIFICATION_COOLDOWN_HOURS * 3600):
+                write_notification("All processes are idle", "info")
+                last_idle_notification_ts = now
             was_idle = True
         elif not is_idle_this_loop:
             was_idle = False

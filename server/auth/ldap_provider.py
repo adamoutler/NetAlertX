@@ -244,7 +244,10 @@ class LdapProvider(AuthProvider):
         )
 
         if cfg["use_start_tls"] and not cfg["use_ssl"]:
-            conn.start_tls()
+            if not conn.start_tls():
+                mylog("warning", [f"[auth.ldap] StartTLS negotiation failed: {conn.result}"])
+                conn.unbind()
+                return conn, False
 
         if not conn.bind():
             return conn, False

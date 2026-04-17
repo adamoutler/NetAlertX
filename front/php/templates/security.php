@@ -54,11 +54,15 @@ $sessionLogin = isset($_SESSION['login']) ? $_SESSION['login'] : 0;
 // Handle logout
 if (!empty($_REQUEST['action']) && $_REQUEST['action'] == 'logout') {
     session_destroy();
+    
+    // Determine protocol for secure cookie flag
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+    
     setcookie(COOKIE_SAVE_LOGIN_NAME, "", [
         'expires'  => time() - 3600,
         'path'     => '/',
         'httponly'  => true,
-        'secure'   => !empty($_SERVER['HTTPS']),
+        'secure'   => $protocol === 'https://',
         'samesite' => 'Strict',
     ]);
     redirect('index.php');

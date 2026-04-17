@@ -261,9 +261,10 @@ class plugin_manager:
 
         mylog("minimal", [f"[Test] {prefix} executing: {cmd_str}"])
 
+        import shlex
         try:
             output = subprocess.check_output(
-                cmd_str.split(),
+                shlex.split(cmd_str),
                 universal_newlines=True,
                 stderr=subprocess.STDOUT,
                 timeout=30,

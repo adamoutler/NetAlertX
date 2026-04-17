@@ -111,7 +111,7 @@ def test_ldap_ui_login(tmp_path: pathlib.Path):
                 ],
                 "depends_on": ["ldap"],
                 "volumes": [
-                    f"{data_volume_name}:{CONTAINER_PATHS['data']}",
+                    f"{tmp_path / 'test_data' / 'data'}:{CONTAINER_PATHS['data']}",
                     f"{tmp_path / 'test_data' / 'log'}:{CONTAINER_PATHS['log']}",
                     f"{tmp_path / 'test_data' / 'api'}:{CONTAINER_PATHS['api']}",
                     f"{tmp_path / 'test_data' / 'nginx_conf'}:{CONTAINER_PATHS['nginx_active']}",

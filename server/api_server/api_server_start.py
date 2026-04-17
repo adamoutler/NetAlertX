@@ -1962,11 +1962,13 @@ LOCKOUT_TIME = 900  # 15 minutes
 
 
 def _get_client_ip():
-    """Return the real client IP, respecting X-Forwarded-For behind trusted proxies."""
+    """Return the client IP, trusting X-Forwarded-For only from local/proxy callers."""
+    remote_addr = request.remote_addr or ""
     forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
+    trusted_proxies = {"127.0.0.1", "::1", "localhost"}
+    if forwarded and remote_addr in trusted_proxies:
         return forwarded.split(",")[0].strip()
-    return request.remote_addr
+    return remote_addr
 
 @app.route("/api/auth/login", methods=["POST"])
 @validate_request(
