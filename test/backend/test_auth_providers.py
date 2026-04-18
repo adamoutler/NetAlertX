@@ -14,6 +14,15 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+@pytest.fixture(autouse=True)
+def mock_all_mylogs():
+    with patch("auth.local_provider.mylog"), \
+         patch("auth.ldap_provider.mylog"), \
+         patch("auth.manager.mylog"), \
+         patch("helper.mylog"), \
+         patch("logger.mylog"):
+        yield
+
 # Register NetAlertX server directory so bare module imports resolve
 INSTALL_PATH = os.getenv("NETALERTX_APP", "/app")
 sys.path.extend([f"{INSTALL_PATH}/front/plugins", f"{INSTALL_PATH}/server"])
@@ -78,7 +87,8 @@ class TestLocalProvider:
 
     def test_missing_stored_hash(self):
         from auth.local_provider import LocalProvider
-        with patch("auth.local_provider.get_setting_value", return_value=""):
+        with patch("auth.local_provider.get_setting_value", return_value=""), \
+             patch("auth.local_provider.mylog"):
             result = LocalProvider().authenticate("admin", "anything")
         assert result.success is False
 
