@@ -61,7 +61,7 @@ class AuthManager:
                             mylog("verbose", [f"[auth.manager] Authentication failed for user '{_sanitize_for_log(username)}' via both ldap and local"])
                         return local_result
                     else:
-                        mylog("verbose", [f"[auth.manager] User not found in LDAP, but local fallback is disabled."])
+                        mylog("verbose", ["[auth.manager] User not found in LDAP, but local fallback is disabled."])
                         return ldap_result
 
                 # LDAP returned failure without exception, which means invalid credentials

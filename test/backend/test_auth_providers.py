@@ -281,9 +281,12 @@ class TestAuthManager:
         from auth.base import AuthResult
 
         def mock_settings(key):
-            if key == "LDAP_enabled": return True
-            if key == "SETPWD_enable_password": return True
-            if key == "LDAP_disable_local_admin": return False
+            if key == "LDAP_enabled":
+                return True
+            if key == "SETPWD_enable_password":
+                return True
+            if key == "LDAP_disable_local_admin":
+                return True
             return False
 
         manager = AuthManager()
@@ -297,3 +300,4 @@ class TestAuthManager:
         assert result.success is True
         assert result.provider == "local"
 "local"
+
