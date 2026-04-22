@@ -856,6 +856,10 @@ def process_plugin_events(db, plugin, plugEventsArr):
                         pluginEvents[index].status = "watched-not-changed"
                 index += 1
 
+            # Track objects whose state actually changed this cycle
+            # (only these will be recorded in Plugins_History)
+            changed_this_cycle = set()
+
             # Loop thru events and check if previously available objects are missing
             for tmpObj in pluginObjects:
                 isMissing = True
@@ -869,6 +873,7 @@ def process_plugin_events(db, plugin, plugEventsArr):
                     if tmpObj.status != "missing-in-last-scan":
                         tmpObj.changed = timeNowUTC()
                         tmpObj.status = "missing-in-last-scan"
+                        changed_this_cycle.add(tmpObj.idsHash)
                     # mylog('debug', [f'[Plugins] Missing from last scan (PrimaryID | SecondaryID): {tmpObj.primaryId} | {tmpObj.secondaryId}'])
 
             # Merge existing plugin objects with newly discovered ones and update existing ones with new values
@@ -877,6 +882,7 @@ def process_plugin_events(db, plugin, plugEventsArr):
                 if tmpObjFromEvent.status == "not-processed":
                     # This is a new object as it was not discovered as "exists" previously
                     tmpObjFromEvent.status = "new"
+                    changed_this_cycle.add(tmpObjFromEvent.idsHash)
 
                     pluginObjects.append(tmpObjFromEvent)
                 # update data of existing objects
@@ -885,6 +891,8 @@ def process_plugin_events(db, plugin, plugEventsArr):
                     for plugObj in pluginObjects:
                         # find corresponding object for the event and merge
                         if plugObj.idsHash == tmpObjFromEvent.idsHash:
+                            if plugObj.status == "missing-in-last-scan" or tmpObjFromEvent.status == "watched-changed":
+                                changed_this_cycle.add(tmpObjFromEvent.idsHash)
                             pluginObjects[index] = combine_plugin_objects(
                                 plugObj, tmpObjFromEvent
                             )
@@ -941,8 +949,9 @@ def process_plugin_events(db, plugin, plugEventsArr):
                 if plugObj.status in statuses_to_report_on:
                     events_to_insert.append(values)
 
-                # combine all DB insert and update events into one for history
-                history_to_insert.append(values)
+                # Only record history for objects that actually changed this cycle
+                if plugObj.idsHash in changed_this_cycle:
+                    history_to_insert.append(values)
 
             mylog("debug", f"[Plugins] pluginEvents      count: {len(pluginEvents)}")
             mylog("debug", f"[Plugins] pluginObjects     count: {len(pluginObjects)}")
