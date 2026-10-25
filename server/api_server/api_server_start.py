@@ -1,6 +1,7 @@
 import threading
 import sys
 import os
+import secrets
 from datetime import timedelta
 
 # flake8: noqa: E402
@@ -63,6 +64,7 @@ from messaging.in_app import (  # noqa: E402 [flake8 lint suppression]
     mark_notification_as_read
 )
 from .mcp_endpoint import (
+    mcp_streamable_http,
     mcp_sse,
     mcp_messages,
     openapi_spec,
@@ -151,7 +153,22 @@ CORS(
     app,
     resources={r"/*": {"origins": _cors_origins}},
     supports_credentials=True,
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "Mcp-Session-Id",
+        "MCP-Protocol-Version",
+        "Last-Event-ID",
+    ],
+    expose_headers=[
+        "Mcp-Session-Id",
+        "MCP-Protocol-Version",
+        "Deprecation",
+        "Link",
+    ],
     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 )
 
@@ -169,19 +186,23 @@ def is_authorized():
         return True
 
     expected_token = get_setting_value('API_TOKEN')
+    expected_token_str = str(expected_token).strip() if expected_token is not None else ""
 
-    if not expected_token:
+    if not expected_token_str or expected_token_str == "None" or len(expected_token_str) < 2:
         mylog("verbose", ["[api] API_TOKEN is not set. Access denied."])
         return False
 
     # Check Authorization header first (primary method)
-    auth_header = request.headers.get("Authorization", "")
-    header_token = auth_header.split()[-1] if auth_header.startswith("Bearer ") else ""
+    auth_header = request.headers.get("Authorization", "").strip()
+    parts = auth_header.split()
+    header_token = parts[1] if len(parts) == 2 and parts[0].lower() == "bearer" else ""
 
     # Also check query string token (for SSE and other streaming endpoints)
     query_token = request.args.get("token", "")
 
-    is_authorized_result = (header_token == expected_token) or (query_token == expected_token)
+    header_match = bool(header_token) and secrets.compare_digest(header_token, expected_token_str)
+    query_match = bool(query_token) and secrets.compare_digest(query_token, expected_token_str)
+    is_authorized_result = header_match or query_match
 
     if not is_authorized_result:
         msg = "[api] Unauthorized access attempt - make sure your GRAPHQL_PORT and API_TOKEN settings are correct."
@@ -189,6 +210,13 @@ def is_authorized():
         mylog("verbose", [msg])
 
     return is_authorized_result
+
+
+@app.route('/mcp', methods=['GET', 'POST', 'DELETE', 'OPTIONS'])
+def api_mcp_streamable_http():
+    if not is_authorized():
+        return jsonify({"success": False, "message": "ERROR: Not authorized", "error": "Forbidden"}), 403
+    return mcp_streamable_http()
 
 
 @app.route('/mcp/sse', methods=['GET', 'POST', 'OPTIONS'])
@@ -217,9 +245,8 @@ def log_request_info():
     safe_headers = {k: v for k, v in request.headers.items() if k.lower() not in ('authorization', 'cookie', 'x-api-key')}
     mylog("debug", [f"[HTTP] Headers: {safe_headers}"])
     if request.method == "POST":
-        # Be careful with large bodies, but log first 1000 chars
-        data = request.get_data(as_text=True)
-        mylog("debug", [f"[HTTP] Body length: {len(data)} chars"])
+        # Avoid reading unbounded request bodies into memory before auth/size checks
+        mylog("debug", [f"[HTTP] Body content_length: {request.content_length or 0} bytes"])
 
 
 @app.errorhandler(404)
@@ -442,7 +469,11 @@ def api_device_copy(payload=None):
 @validate_request(
     operation_id="update_device_column",
     summary="Update Device Column",
-    description="Update a specific database column for a device. Use this to mark devices as favorites (columnName='devFavorite', columnValue=1). See `get_favorite_devices` to retrieve them.",
+    description=(
+        "Update a specific database column for a device. "
+        "Use this to mark devices as favorites (columnName='devFavorite', columnValue=1). "
+        "See `get_favorite_devices` to retrieve them."
+    ),
     path_params=[{
         "name": "mac",
         "description": "Device MAC address",
@@ -669,7 +700,11 @@ def api_get_devices(payload: DeviceListAllRequest = None):
 @validate_request(
     operation_id="delete_devices",
     summary="Delete Devices (Bulk / All)",
-    description="Delete devices by MAC address. Provide a list of MACs to delete specific devices, set confirm_delete_all=true with an empty macs list to delete ALL devices. Supports wildcard '*' matching.",
+    description=(
+        "Delete devices by MAC address. Provide a list of MACs to delete specific devices, "
+        "set confirm_delete_all=true with an empty macs list to delete ALL devices. "
+        "Supports wildcard '*' matching."
+    ),
     request_model=DeleteDevicesRequest,
     tags=["devices"],
     auth_callable=is_authorized

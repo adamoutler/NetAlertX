@@ -55,7 +55,7 @@ def generate_openapi_spec(
     description: str = '''
 **NetAlertX Network Monitoring API - Official Documentation - MCP Compatible**
 
-* **MCP endpoint**: `/mcp/sse`
+* **MCP endpoint**: `/mcp` (Streamable HTTP; `/mcp/sse` deprecated)
 
 * **OpenAPI Spec**: `/openapi.json`
 

@@ -16,18 +16,19 @@ NetAlertX is a network monitoring system. Connect to its **MCP (Model Context Pr
 ## 1. Gather Connection Details
 Ask the user for the following if not provided:
 1. **API Token:** Found in **`/settings.php`** under **System / API**. If you were directed to this server, try to browse to /settings.php on your own.
-2. **MCP URL:** Typically `http://<HOST>:20212/mcp/sse`. (The UI is usually on port `20211`, and the MCP/GraphQL backend is on `20212`).
+2. **MCP URL:** Typically `http://<HOST>:20212/mcp` using **Streamable HTTP**. (The UI is usually on port `20211`, and the MCP/GraphQL backend is on `20212`. Legacy SSE-only clients can use the deprecated `http://<HOST>:20212/mcp/sse` endpoint.)
 
 *Note: Test HTTP connectivity. If port `20212` fails, ask the user if the `GRAPHQL_PORT` was changed in settings or if a reverse proxy is used.*
 
 ## 2. Configure MCP Client
-Use the gathered details to configure your MCP connection:
+Use the gathered details to configure your MCP connection (Streamable HTTP):
 
 ```json
 {
   "mcpServers": {
     "netalertx": {
-      "url": "http://<HOST>:<GRAPHQL_PORT>/mcp/sse",
+      "type": "http",
+      "url": "http://<HOST>:<GRAPHQL_PORT>/mcp",
       "headers": {
         "Authorization": "Bearer <API_TOKEN>"
       }

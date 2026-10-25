@@ -86,13 +86,13 @@ http://<server>:<GRAPHQL_PORT>/
 
 ### MCP Server Bridge
 
-NetAlertX includes an **MCP (Model Context Protocol) Server Bridge** that provides AI assistants access to NetAlertX functionality through standardized tools. MCP endpoints are available at `/mcp/sse/*` paths and mirror the functionality of standard REST endpoints:
+NetAlertX includes an **MCP (Model Context Protocol) Server Bridge** that provides AI assistants access to NetAlertX functionality through standardized tools, resources, and prompts over **Streamable HTTP**:
 
-* `/mcp/sse` - Server-Sent Events endpoint for MCP client connections
-* `/mcp/sse/openapi.json` - OpenAPI specification for available MCP tools
-* `/mcp/sse/device/*`, `/mcp/sse/devices/*`, `/mcp/sse/nettools/*`, `/mcp/sse/events/*` - MCP-enabled versions of REST endpoints
+* `/mcp` (`POST`, `GET`, `DELETE`) - Primary **Streamable HTTP** endpoint for MCP client connections, JSON-RPC 2.0 requests/batches, session management (`Mcp-Session-Id`), and optional server-sent event streams
+* `/openapi.json` (`GET`) - OpenAPI 3.1 specification used to dynamically generate MCP tool schemas (standard REST endpoints such as `/device/*`, `/devices/*`, `/nettools/*`, and `/events/*` are invoked via JSON-RPC `tools/call` on `/mcp`)
+* `/mcp/sse` (`GET`) and `/mcp/messages` (`POST`) - **Deprecated** legacy HTTP+SSE endpoints retained for backward compatibility with older SSE-only MCP clients
 
-MCP endpoints require the same Bearer token authentication as REST endpoints.
+MCP endpoints require the same Bearer token authentication (`Authorization: Bearer <API_TOKEN>`) as REST endpoints.
 
 **📖 See [MCP Server Bridge API](API_MCP.md) for complete documentation, tool specifications, and integration examples.**
 

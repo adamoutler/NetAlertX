@@ -29,6 +29,7 @@ import uuid
 import queue
 import time
 import os
+import re
 from copy import deepcopy
 import secrets
 from typing import Optional, Dict, Any, List
@@ -49,15 +50,24 @@ from .openapi.registry import get_registry, is_tool_disabled
 # CONSTANTS & CONFIGURATION
 # =============================================================================
 
-MCP_PROTOCOL_VERSION = "2024-11-05"
+SUPPORTED_PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
+MCP_DEFAULT_STREAMABLE_HTTP_VERSION = "2025-03-26"
+MCP_LEGACY_SSE_VERSION = "2024-11-05"
+MCP_PROTOCOL_VERSION = MCP_DEFAULT_STREAMABLE_HTTP_VERSION
 MCP_SERVER_NAME = "NetAlertX"
 MCP_SERVER_VERSION = "2.0.0"
 
-# Session timeout in seconds (cleanup idle sessions)
+# Session & Request Limits
 SESSION_TIMEOUT = 300  # 5 minutes
-
-# SSE keep-alive interval
 SSE_KEEPALIVE_INTERVAL = 20  # seconds
+MAX_ACTIVE_SESSIONS = 32
+MAX_MCP_BODY_BYTES = 1_048_576  # 1 MB
+MAX_BATCH_SIZE = 10
+SESSION_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+LEGACY_DEPRECATION_HEADERS = {
+    "Deprecation": "true",
+    "Link": '</mcp>; rel="successor-version"',
+}
 
 # =============================================================================
 # BLUEPRINTS
@@ -80,22 +90,25 @@ _cleanup_stop_event = threading.Event()
 _cleanup_thread_lock = threading.Lock()
 
 
+def _evict_expired_sessions_locked() -> None:
+    """Evict expired sessions while holding _sessions_lock."""
+    current_time = time.time()
+    expired_sessions = [
+        sid
+        for sid, sdata in _mcp_sessions.items()
+        if current_time - sdata.get("last_activity", 0) > SESSION_TIMEOUT
+    ]
+    for sid in expired_sessions:
+        mylog("verbose", [f"[MCP] Cleaning up expired session: {sid}"])
+        del _mcp_sessions[sid]
+
+
 def _cleanup_sessions():
     """Background thread to clean up expired sessions."""
     while not _cleanup_stop_event.is_set():
         try:
-            current_time = time.time()
-            expired_sessions = []
-
             with _sessions_lock:
-                for session_id, session_data in _mcp_sessions.items():
-                    if current_time - session_data.get("last_activity", 0) > SESSION_TIMEOUT:
-                        expired_sessions.append(session_id)
-
-                for session_id in expired_sessions:
-                    mylog("verbose", [f"[MCP] Cleaning up expired session: {session_id}"])
-                    del _mcp_sessions[session_id]
-
+                _evict_expired_sessions_locked()
         except Exception as e:
             mylog("none", [f"[MCP] Session cleanup error: {e}"])
 
@@ -117,11 +130,16 @@ def _ensure_cleanup_thread():
                 _cleanup_thread.start()
 
 
-def create_session() -> str:
-    """Create a new MCP session and return the session ID."""
-    _ensure_cleanup_thread()
+def is_valid_session_id(session_id: Optional[str]) -> bool:
+    """Validate that a session ID matches the expected 32-char lowercase hex format."""
+    if not session_id or not isinstance(session_id, str):
+        return False
+    return bool(SESSION_ID_PATTERN.match(session_id))
 
-    session_id = uuid.uuid4().hex
+
+def create_session() -> Optional[str]:
+    """Create a new MCP session and return the session ID, or None if at capacity."""
+    _ensure_cleanup_thread()
 
     # Use configurable maxsize for message queue to prevent memory exhaustion
     # In production this could be loaded from settings
@@ -135,9 +153,15 @@ def create_session() -> str:
         mylog("none", ["[MCP] Invalid MCP_QUEUE_MAXSIZE, defaulting to 1000"])
         queue_maxsize = 1000
 
+    session_id = uuid.uuid4().hex
     message_queue: queue.Queue = queue.Queue(maxsize=queue_maxsize)
 
     with _sessions_lock:
+        _evict_expired_sessions_locked()
+        if len(_mcp_sessions) >= MAX_ACTIVE_SESSIONS:
+            mylog("minimal", [f"[MCP] Session limit reached ({MAX_ACTIVE_SESSIONS}). Rejecting new session."])
+            return None
+
         _mcp_sessions[session_id] = {
             "queue": message_queue,
             "created_at": time.time(),
@@ -151,7 +175,11 @@ def create_session() -> str:
 
 def get_session(session_id: str) -> Optional[Dict[str, Any]]:
     """Get a defensive copy of session data by ID, updating last activity."""
+    if not is_valid_session_id(session_id):
+        return None
+
     with _sessions_lock:
+        _evict_expired_sessions_locked()
         session = _mcp_sessions.get(session_id)
         if not session:
             return None
@@ -193,13 +221,16 @@ def check_auth() -> bool:
         bool: True if the Authorization header matches the expected API token.
     """
     raw_token = get_setting_value('API_TOKEN')
+    raw_token_str = str(raw_token).strip() if raw_token is not None else ""
 
-    # Fail closed if token is not set (empty or very short)
+    # Fail closed if token is not set (empty, "None", or very short)
     # Test mode bypass: MCP_TEST_MODE must be explicitly set and should NEVER
     # be enabled in production environments. This flag allows tests to run
     # without a configured API_TOKEN.
     test_mode = os.getenv("MCP_TEST_MODE", "").lower() in ("1", "true", "yes")
-    if (not raw_token or len(str(raw_token)) < 2) and not test_mode:
+    if not raw_token_str or raw_token_str == "None" or len(raw_token_str) < 2:
+        if test_mode:
+            return True
         mylog("minimal", ["[MCP] CRITICAL: API_TOKEN is not configured or too short. Access denied."])
         return False
 
@@ -207,7 +238,7 @@ def check_auth() -> bool:
     # SECURITY: Always prefer Authorization header over query string tokens
     auth_header = request.headers.get("Authorization", "").strip()
     parts = auth_header.split()
-    header_token = parts[1] if auth_header.startswith("Bearer ") and len(parts) >= 2 else ""
+    header_token = parts[1] if len(parts) == 2 and parts[0].lower() == "bearer" else ""
 
     # Also check query string token (for SSE and other streaming endpoints)
     # SECURITY WARNING: query_token in URL can be exposed in:
@@ -221,9 +252,8 @@ def check_auth() -> bool:
     query_token = request.args.get("token", "")
 
     # Use constant-time comparison to prevent timing attacks
-    raw_token_str = str(raw_token)
-    header_match = header_token and secrets.compare_digest(header_token, raw_token_str)
-    query_match = query_token and secrets.compare_digest(query_token, raw_token_str)
+    header_match = bool(header_token) and secrets.compare_digest(header_token, raw_token_str)
+    query_match = bool(query_token) and secrets.compare_digest(query_token, raw_token_str)
 
     return header_match or query_match
 
@@ -469,7 +499,21 @@ def find_route_for_tool(tool_name: str) -> Optional[Dict[str, Any]]:
 # MCP REQUEST PROCESSING
 # =============================================================================
 
-def process_mcp_request(data: Dict[str, Any], session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def _negotiate_protocol_version(
+    client_version: Any,
+    default_version: str = MCP_DEFAULT_STREAMABLE_HTTP_VERSION
+) -> str:
+    """Negotiate the MCP protocol version with the client."""
+    if isinstance(client_version, str) and client_version in SUPPORTED_PROTOCOL_VERSIONS:
+        return client_version
+    return default_version
+
+
+def process_mcp_request(
+    data: Dict[str, Any],
+    session_id: Optional[str] = None,
+    default_protocol_version: str = MCP_DEFAULT_STREAMABLE_HTTP_VERSION
+) -> Optional[Dict[str, Any]]:
     """
     Process an incoming MCP JSON-RPC request.
 
@@ -485,13 +529,22 @@ def process_mcp_request(data: Dict[str, Any], session_id: Optional[str] = None) 
     Args:
         data: JSON-RPC request data
         session_id: Optional session identifier
+        default_protocol_version: Fallback protocol version when client version is omitted or unknown
 
     Returns:
         JSON-RPC response dictionary, or None for notifications
     """
+    if not isinstance(data, dict):
+        return _error_response(None, -32600, "Invalid Request: expected JSON object")
+
     method = data.get("method")
     msg_id = data.get("id")
-    params = data.get("params", {})
+    params = data.get("params") or {}
+    if not isinstance(params, dict):
+        return _error_response(msg_id, -32602, "Invalid params: expected object")
+
+    if data.get("jsonrpc") != "2.0" or not isinstance(method, str) or not method:
+        return _error_response(msg_id, -32600, "Invalid Request")
 
     mylog("debug", [f"[MCP] Processing request: method={method}, id={msg_id}"])
 
@@ -503,11 +556,16 @@ def process_mcp_request(data: Dict[str, Any], session_id: Optional[str] = None) 
         if session_id:
             mark_session_initialized(session_id)
 
+        negotiated_version = _negotiate_protocol_version(
+            params.get("protocolVersion"),
+            default_version=default_protocol_version
+        )
+
         return {
             "jsonrpc": "2.0",
             "id": msg_id,
             "result": {
-                "protocolVersion": MCP_PROTOCOL_VERSION,
+                "protocolVersion": negotiated_version,
                 "capabilities": {
                     "tools": {"listChanged": False},
                     "resources": {"subscribe": False, "listChanged": False},
@@ -521,9 +579,9 @@ def process_mcp_request(data: Dict[str, Any], session_id: Optional[str] = None) 
         }
 
     # -------------------------------------------------------------------------
-    # notifications/initialized - No response needed
+    # notifications/* - No response needed for JSON-RPC notifications
     # -------------------------------------------------------------------------
-    if method == "notifications/initialized":
+    if method == "notifications/initialized" or (method.startswith("notifications/") and "id" not in data):
         return None
 
     # -------------------------------------------------------------------------
@@ -772,7 +830,7 @@ def _execute_tool(route: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]
     except Exception as e:
         mylog("none", [f"[MCP] Error executing tool {route['operation_id']}: {e}"])
         return {
-            "content": [{"type": "text", "text": f"Error: {str(e)}"}],
+            "content": [{"type": "text", "text": "Error: Tool execution failed"}],
             "isError": True
         }
 
@@ -888,7 +946,8 @@ def _read_resource(uri: str) -> List[Dict[str, Any]]:
                 }]
 
             except Exception as e:
-                return [{"uri": uri, "text": f"Error reading file: {e}"}]
+                mylog("none", [f"[MCP] Error reading resource {uri}: {e}"])
+                return [{"uri": uri, "text": "Error reading file"}]
 
         return [{"uri": uri, "text": "File not found"}]
 
@@ -1006,9 +1065,250 @@ def _get_prompt(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
 # FLASK ROUTE HANDLERS
 # =============================================================================
 
+def _with_deprecation_headers(resp: Response) -> Response:
+    """Attach RFC 8594 Deprecation and Link headers to legacy SSE/messages responses."""
+    for key, val in LEGACY_DEPRECATION_HEADERS.items():
+        resp.headers[key] = val
+    return resp
+
+
+def _exceeds_body_limit() -> bool:
+    """Check whether the incoming HTTP request payload exceeds MAX_MCP_BODY_BYTES."""
+    content_length = request.content_length
+    if content_length is not None and content_length > MAX_MCP_BODY_BYTES:
+        return True
+    raw_bytes = request.get_data(cache=True)
+    return len(raw_bytes) > MAX_MCP_BODY_BYTES
+
+
+@mcp_bp.route('/mcp', methods=['GET', 'POST', 'DELETE', 'OPTIONS'])
+def mcp_streamable_http():
+    """
+    Handle MCP Streamable HTTP endpoint (MCP 2025-03-26 / 2025-06-18).
+
+    Supports:
+    - POST /mcp: JSON-RPC 2.0 requests, notifications, and batch arrays
+    - GET /mcp: Standalone SSE stream for server-initiated messages
+    - DELETE /mcp: Explicit session termination via Mcp-Session-Id header
+    - OPTIONS /mcp: CORS preflight
+    """
+    if request.method == "OPTIONS":
+        return jsonify({"success": True}), 200
+
+    if not check_auth():
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    # Validate MCP-Protocol-Version header when provided by client
+    header_proto_version = request.headers.get("MCP-Protocol-Version")
+    if header_proto_version is not None:
+        header_proto_version = header_proto_version.strip()
+        if header_proto_version not in SUPPORTED_PROTOCOL_VERSIONS:
+            return jsonify(
+                _error_response(
+                    None,
+                    -32600,
+                    f"Unsupported MCP-Protocol-Version '{header_proto_version}'. "
+                    f"Supported: {', '.join(SUPPORTED_PROTOCOL_VERSIONS)}"
+                )
+            ), 400
+
+    effective_proto_version = header_proto_version or MCP_DEFAULT_STREAMABLE_HTTP_VERSION
+    base_headers = {"MCP-Protocol-Version": effective_proto_version}
+
+    # Validate Mcp-Session-Id header format if supplied
+    session_id = request.headers.get("Mcp-Session-Id")
+    if session_id is not None:
+        session_id = session_id.strip()
+        if not is_valid_session_id(session_id):
+            return jsonify(_error_response(None, -32600, "Invalid Mcp-Session-Id header")), 400, base_headers
+
+    # -------------------------------------------------------------------------
+    # DELETE /mcp - Explicit session termination
+    # -------------------------------------------------------------------------
+    if request.method == "DELETE":
+        if not session_id:
+            return jsonify(_error_response(None, -32600, "Missing Mcp-Session-Id header")), 400, base_headers
+        if not delete_session(session_id):
+            return jsonify(_error_response(None, -32001, "Session not found or expired")), 404, base_headers
+        return jsonify({"success": True, "status": "terminated"}), 200, base_headers
+
+    # -------------------------------------------------------------------------
+    # GET /mcp - Standalone SSE stream for server-to-client messages
+    # -------------------------------------------------------------------------
+    if request.method == "GET":
+        accept_header = request.headers.get("Accept", "")
+        if accept_header and "text/event-stream" not in accept_header and "*/*" not in accept_header:
+            return jsonify(_error_response(None, -32600, "Accept header must include text/event-stream")), 406, base_headers
+
+        ephemeral_session = False
+        if session_id:
+            session = get_session(session_id)
+            if not session:
+                return jsonify(_error_response(None, -32001, "Session not found or expired")), 404, base_headers
+            active_session_id = session_id
+        else:
+            active_session_id = create_session()
+            if not active_session_id:
+                return jsonify(_error_response(None, -32000, "Server busy: maximum active MCP sessions reached")), 503, base_headers
+            session = get_session(active_session_id)
+            if not session:
+                delete_session(active_session_id)
+                return jsonify(_error_response(None, -32603, "Failed to initialize MCP session")), 500, base_headers
+            ephemeral_session = True
+
+        message_queue = session["queue"]
+
+        def stream():
+            """Generator for standalone Streamable HTTP SSE stream (no legacy endpoint event)."""
+            try:
+                while True:
+                    try:
+                        message = message_queue.get(timeout=SSE_KEEPALIVE_INTERVAL)
+                        yield f"event: message\ndata: {json.dumps(message)}\n\n"
+                    except queue.Empty:
+                        yield ": keep-alive\n\n"
+            except GeneratorExit:
+                if ephemeral_session:
+                    delete_session(active_session_id)
+
+        stream_headers = {
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "MCP-Protocol-Version": effective_proto_version,
+            "Mcp-Session-Id": active_session_id,
+        }
+        return Response(
+            stream_with_context(stream()),
+            mimetype="text/event-stream",
+            headers=stream_headers,
+        )
+
+    # -------------------------------------------------------------------------
+    # POST /mcp - JSON-RPC requests, notifications, and batches
+    # -------------------------------------------------------------------------
+    if _exceeds_body_limit():
+        return jsonify(_error_response(None, -32600, "Payload Too Large")), 413, base_headers
+
+    try:
+        data = request.get_json(silent=False, force=True)
+    except Exception:
+        return jsonify(_error_response(None, -32700, "Parse error: invalid JSON")), 400, base_headers
+
+    if data is None or not isinstance(data, (dict, list)):
+        return jsonify(_error_response(None, -32600, "Invalid Request")), 400, base_headers
+
+    # Handle JSON-RPC Batch
+    if isinstance(data, list):
+        if len(data) == 0 or len(data) > MAX_BATCH_SIZE:
+            return jsonify(_error_response(None, -32600, f"Invalid batch size (must be 1..{MAX_BATCH_SIZE})")), 400, base_headers
+
+        for item in data:
+            if not isinstance(item, dict) or item.get("jsonrpc") != "2.0" or not isinstance(item.get("method"), str):
+                return jsonify(_error_response(None, -32600, "Invalid Request in batch")), 400, base_headers
+            if item.get("method") == "initialize" and len(data) > 1:
+                return jsonify(_error_response(item.get("id"), -32600, "initialize cannot be combined in a batch")), 400, base_headers
+
+        if session_id:
+            session = get_session(session_id)
+            if not session:
+                return jsonify(_error_response(None, -32001, "Session not found or expired")), 404, base_headers
+
+        # Check if single-element batch is an initialize call
+        if len(data) == 1 and data[0].get("method") == "initialize":
+            if session_id is not None:
+                return jsonify(_error_response(data[0].get("id"), -32600, "Cannot supply Mcp-Session-Id on initialize")), 400, base_headers
+            new_session_id = create_session()
+            if not new_session_id:
+                return jsonify(_error_response(data[0].get("id"), -32000, "Server busy: maximum active MCP sessions reached")), 503, base_headers
+            try:
+                resp_item = process_mcp_request(data[0], new_session_id, default_protocol_version=effective_proto_version)
+            except Exception as e:
+                delete_session(new_session_id)
+                mylog("none", [f"[MCP] Batch initialize error: {e}"])
+                return jsonify(_error_response(data[0].get("id"), -32603, "Internal server error")), 500, base_headers
+            negotiated = resp_item.get("result", {}).get("protocolVersion", effective_proto_version) if resp_item else effective_proto_version
+            resp_headers = {
+                "Mcp-Session-Id": new_session_id,
+                "MCP-Protocol-Version": negotiated,
+            }
+            return jsonify([resp_item]), 200, resp_headers
+
+        responses = []
+        for item in data:
+            try:
+                res = process_mcp_request(item, session_id, default_protocol_version=effective_proto_version)
+                if res is not None:
+                    responses.append(res)
+            except Exception as e:
+                mylog("none", [f"[MCP] Batch item processing error: {e}"])
+                responses.append(_error_response(item.get("id"), -32603, "Internal server error"))
+
+        resp_headers = dict(base_headers)
+        if session_id:
+            resp_headers["Mcp-Session-Id"] = session_id
+
+        if not responses:
+            return Response("", status=202, headers=resp_headers)
+        return jsonify(responses), 200, resp_headers
+
+    # Single JSON-RPC object
+    method = data.get("method")
+    msg_id = data.get("id")
+    if data.get("jsonrpc") != "2.0" or not isinstance(method, str) or not method:
+        return jsonify(_error_response(msg_id, -32600, "Invalid Request")), 400, base_headers
+
+    if method == "initialize":
+        if session_id is not None:
+            return jsonify(_error_response(msg_id, -32600, "Cannot supply Mcp-Session-Id on initialize")), 400, base_headers
+
+        new_session_id = create_session()
+        if not new_session_id:
+            return jsonify(_error_response(msg_id, -32000, "Server busy: maximum active MCP sessions reached")), 503, base_headers
+
+        try:
+            response_data = process_mcp_request(data, new_session_id, default_protocol_version=effective_proto_version)
+        except Exception as e:
+            delete_session(new_session_id)
+            mylog("none", [f"[MCP] Initialize error: {e}"])
+            return jsonify(_error_response(msg_id, -32603, "Internal server error")), 500, base_headers
+
+        negotiated = (
+            response_data.get("result", {}).get("protocolVersion", effective_proto_version)
+            if response_data else effective_proto_version
+        )
+        resp_headers = {
+            "Mcp-Session-Id": new_session_id,
+            "MCP-Protocol-Version": negotiated,
+        }
+        return jsonify(response_data), 200, resp_headers
+
+    # Non-initialize request or notification
+    if session_id is not None:
+        session = get_session(session_id)
+        if not session:
+            return jsonify(_error_response(msg_id, -32001, "Session not found or expired")), 404, base_headers
+
+    try:
+        response_data = process_mcp_request(data, session_id, default_protocol_version=effective_proto_version)
+    except Exception as e:
+        mylog("none", [f"[MCP] POST /mcp processing error: {e}"])
+        return jsonify(_error_response(msg_id, -32603, "Internal server error")), 500, base_headers
+
+    resp_headers = dict(base_headers)
+    if session_id:
+        resp_headers["Mcp-Session-Id"] = session_id
+
+    if response_data is None:
+        return Response("", status=202, headers=resp_headers)
+
+    return jsonify(response_data), 200, resp_headers
+
+
+@mcp_bp.route('/mcp/sse', methods=['GET', 'POST', 'OPTIONS'])
 def mcp_sse():
     """
-    Handle MCP Server-Sent Events (SSE) endpoint.
+    Handle legacy MCP Server-Sent Events (SSE) endpoint (DEPRECATED).
 
     Supports both GET (establishing SSE stream) and POST (direct JSON-RPC).
 
@@ -1020,28 +1320,37 @@ def mcp_sse():
     """
     # Handle OPTIONS (CORS preflight)
     if request.method == "OPTIONS":
-        return jsonify({"success": True}), 200
+        return _with_deprecation_headers(jsonify({"success": True})), 200
 
     if not check_auth():
-        return jsonify({"success": False, "error": "Unauthorized"}), 401
+        return _with_deprecation_headers(jsonify({"success": False, "error": "Unauthorized"})), 401
+
+    mylog("verbose", ["[MCP] Legacy /mcp/sse endpoint accessed (deprecated; migrate to /mcp Streamable HTTP)"])
 
     # Handle POST (direct JSON-RPC, stateless)
     if request.method == "POST":
+        if _exceeds_body_limit():
+            return _with_deprecation_headers(jsonify(_error_response(None, -32600, "Payload Too Large"))), 413
         try:
             data = request.get_json(silent=True)
-            if data and "method" in data and "jsonrpc" in data:
-                response = process_mcp_request(data)
+            if data and isinstance(data, dict) and "method" in data and "jsonrpc" in data:
+                response = process_mcp_request(data, default_protocol_version=MCP_LEGACY_SSE_VERSION)
                 if response:
-                    return jsonify(response)
-                return "", 202
+                    return _with_deprecation_headers(jsonify(response))
+                return Response("", status=202, headers=LEGACY_DEPRECATION_HEADERS)
         except Exception as e:
             mylog("none", [f"[MCP] SSE POST processing error: {e}"])
-            return jsonify(_error_response(None, -32603, str(e))), 500
+            return _with_deprecation_headers(jsonify(_error_response(None, -32603, "Internal server error"))), 500
 
-        return jsonify({"status": "ok", "message": "MCP SSE endpoint active"}), 200
+        return _with_deprecation_headers(jsonify({"status": "ok", "message": "MCP SSE endpoint active"})), 200
 
     # Handle GET (establish SSE stream)
     session_id = create_session()
+    if not session_id:
+        return _with_deprecation_headers(
+            jsonify({"success": False, "error": "Server busy: maximum active MCP sessions reached"})
+        ), 503
+
     session = None
     for _ in range(3):
         session = get_session(session_id)
@@ -1051,7 +1360,9 @@ def mcp_sse():
 
     if not session:
         delete_session(session_id)
-        return jsonify({"success": False, "error": "Failed to initialize MCP session"}), 500
+        return _with_deprecation_headers(
+            jsonify({"success": False, "error": "Failed to initialize MCP session"})
+        ), 500
 
     message_queue = session["queue"]
 
@@ -1075,20 +1386,23 @@ def mcp_sse():
             # Clean up session when client disconnects
             delete_session(session_id)
 
+    sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",  # Disable nginx buffering
+        **LEGACY_DEPRECATION_HEADERS,
+    }
     return Response(
         stream_with_context(stream()),
         mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Disable nginx buffering
-        }
+        headers=sse_headers
     )
 
 
+@mcp_bp.route('/mcp/messages', methods=['POST', 'OPTIONS'])
 def mcp_messages():
     """
-    Handle MCP messages for a specific session via HTTP POST.
+    Handle legacy MCP messages for a specific session via HTTP POST (DEPRECATED).
 
     Processes JSON-RPC requests and queues responses for SSE delivery.
 
@@ -1097,32 +1411,40 @@ def mcp_messages():
     """
     # Handle OPTIONS (CORS preflight)
     if request.method == "OPTIONS":
-        return jsonify({"success": True}), 200
+        return _with_deprecation_headers(jsonify({"success": True})), 200
 
     if not check_auth():
-        return jsonify({"success": False, "error": "Unauthorized"}), 401
+        return _with_deprecation_headers(jsonify({"success": False, "error": "Unauthorized"})), 401
+
+    if _exceeds_body_limit():
+        return _with_deprecation_headers(jsonify({"success": False, "error": "Payload Too Large"})), 413
 
     session_id = request.args.get("session_id")
     if not session_id:
-        return jsonify({"success": False, "error": "Missing session_id"}), 400
+        return _with_deprecation_headers(jsonify({"success": False, "error": "Missing session_id"})), 400
+
+    if not is_valid_session_id(session_id):
+        return _with_deprecation_headers(jsonify({"success": False, "error": "Invalid session_id"})), 400
 
     session = get_session(session_id)
     if not session:
-        return jsonify({"success": False, "error": "Session not found or expired"}), 404
+        return _with_deprecation_headers(
+            jsonify({"success": False, "error": "Session not found or expired"})
+        ), 404
 
     message_queue: queue.Queue = session["queue"]
 
     data = request.get_json(silent=True)
-    if not data:
-        return jsonify({"success": False, "error": "Invalid JSON"}), 400
+    if not data or not isinstance(data, dict):
+        return _with_deprecation_headers(jsonify({"success": False, "error": "Invalid JSON"})), 400
 
-    response = process_mcp_request(data, session_id)
+    response = process_mcp_request(data, session_id, default_protocol_version=MCP_LEGACY_SSE_VERSION)
     if response:
         try:
             # Handle bounded queue full
             message_queue.put(response, timeout=5)
         except queue.Full:
             mylog("none", [f"[MCP] Message queue full for session {session_id}. Dropping message."])
-            return jsonify({"success": False, "error": "Queue full"}), 503
+            return _with_deprecation_headers(jsonify({"success": False, "error": "Queue full"})), 503
 
-    return jsonify({"success": True, "status": "accepted"}), 202
+    return _with_deprecation_headers(jsonify({"success": True, "status": "accepted"})), 202
