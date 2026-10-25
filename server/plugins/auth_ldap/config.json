@@ -62,7 +62,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "When enabled the login form shows a username field and credentials are validated against the LDAP server configured below."
+          "string": "Validate user credentials against the configured LDAP server."
         }
       ]
     },
@@ -94,7 +94,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Hostname or IP address of the LDAP / Active Directory server. Example: <code>ldap.example.com</code>"
+          "string": "Hostname or IP address of LDAP server. Example: <code>ldap.example.com</code>"
         }
       ]
     },
@@ -129,7 +129,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "TCP port for LDAP connections. Default is <code>389</code> (plain / StartTLS) or <code>636</code> (LDAPS)."
+          "string": "TCP port for LDAP connections (default <code>389</code>, or <code>636</code> for LDAPS)."
         }
       ]
     },
@@ -164,7 +164,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Enable LDAPS (TLS from the start of the connection). Typically used with port 636. Mutually exclusive with StartTLS."
+          "string": "Enable LDAPS (implicit TLS on port 636). Mutually exclusive with StartTLS."
         }
       ]
     },
@@ -199,7 +199,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Upgrade a plain-text LDAP connection to TLS using the STARTTLS command. Typically used with port 389. Mutually exclusive with LDAPS."
+          "string": "Upgrade connection to TLS via STARTTLS (port 389). Mutually exclusive with LDAPS."
         }
       ]
     },
@@ -234,7 +234,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Require valid TLS certificate from the LDAP server. Enabled by default. Disable only for development or testing with self-signed certificates. <br><br><b>Security warning:</b> Disabling this exposes your LDAP credentials to Man-in-the-Middle (MitM) attacks. Always enable this in production and provide a valid CA certificate."
+          "string": "Verify the LDAP server TLS certificate against trusted CAs."
         }
       ]
     },
@@ -266,7 +266,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Absolute path to a custom CA certificate bundle for validation (e.g. /config/my-ca.pem)."
+          "string": "Path to custom CA certificate bundle (e.g. <code>/config/my-ca.pem</code>)."
         }
       ]
     },
@@ -301,7 +301,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "When enabled, local admin login is completely disabled — only LDAP users can authenticate. <b>Recommended</b> for strict LDAP enforcement. <br><br><b>Warning:</b> If disabled (default), the local admin account with username \"admin\" (default password \"123456\", configurable via \"Set Password->SETPWD_password\") remains active and accessible via the LDAP login form. This can be used as a fallback during LDAP setup, but it also creates a significant security risk if the default password is not changed or if a compromised or unreachable LDAP server allows attackers to fall back to this local account. Enabling this feature overrides the `SETPWD_enable_password` setting."
+          "string": "Disable local admin login to enforce LDAP-only authentication."
         }
       ]
     },
@@ -333,7 +333,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Format for direct binding without a service account. Example: <code>{username}@example.com</code> or <code>uid={username},ou=users,dc=example,dc=com</code>. If set, Bind DN and Search filters are ignored."
+          "string": "Direct bind template (e.g. <code>{username}@example.com</code>). Bypasses user search if set."
         }
       ]
     },
@@ -365,7 +365,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "Distinguished name of a read-only service account used to search for user entries. Example: <code>cn=readonly,dc=example,dc=com</code>. Leave blank for anonymous bind."
+          "string": "Service account DN for user search (e.g. <code>cn=readonly,dc=example,dc=com</code>). Blank for anonymous."
         }
       ]
     },
@@ -433,7 +433,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "The base distinguished name to search under. Example: <code>ou=users,dc=example,dc=com</code>"
+          "string": "Base search DN. Example: <code>ou=users,dc=example,dc=com</code>"
         }
       ]
     },
@@ -465,7 +465,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "LDAP search filter used to locate the user entry. <code>{username}</code> is replaced with the sanitised login name at runtime. OpenLDAP example: <code>(uid={username})</code>. Active Directory example: <code>(sAMAccountName={username})</code>."
+          "string": "Search filter for user lookup. Example: <code>(uid={username})</code> or <code>(sAMAccountName={username})</code>."
         }
       ]
     },
@@ -497,7 +497,7 @@
       "description": [
         {
           "language_code": "en_us",
-          "string": "LDAP attribute that holds the login name. Typically <code>uid</code> for OpenLDAP or <code>sAMAccountName</code> for Active Directory."
+          "string": "LDAP attribute for login name (typically <code>uid</code> or <code>sAMAccountName</code>)."
         }
       ]
     }

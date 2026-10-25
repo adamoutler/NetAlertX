@@ -16,6 +16,9 @@ The LDAP Authentication plugin adds directory-backed login to NetAlertX. It supp
 
 ### Quick Setup Guide
 
+> [!NOTE]
+> NetAlertX does not define individual environment variables for LDAP configuration. All LDAP options are standard application settings configured through the Web UI (**Settings > LDAP Authentication**). To initialize or override settings headlessly in automated or containerized environments, see [Headless / Automated Configuration (`APP_CONF_OVERRIDE`)](#headless--automated-configuration-app_conf_override).
+
 1. Open **Settings** and navigate to **LDAP Authentication**.
 2. Enable **Enable LDAP login**.
 3. Enter the LDAP server hostname and port.
@@ -56,7 +59,7 @@ The LDAP Authentication plugin adds directory-backed login to NetAlertX. It supp
 
 ### Headless / Automated Configuration (`APP_CONF_OVERRIDE`)
 
-For automated and containerized deployments, all NetAlertX settings—including LDAP—can be initialized or overridden using the standard `APP_CONF_OVERRIDE` environment variable containing a JSON dictionary of setting keys and values. Individual setting environment variables are not supported to avoid duplicating configuration mechanisms.
+For automated and containerized deployments, all NetAlertX settings (including LDAP) can be initialized or overridden using the standard `APP_CONF_OVERRIDE` environment variable containing a JSON dictionary of setting keys and values. Individual setting environment variables are not supported to avoid duplicating configuration mechanisms.
 
 | Setting Key | Description | Default |
 |-------------|-------------|---------|
@@ -127,11 +130,12 @@ services:
 - Enable **Disable local admin account** only after you have verified at least one LDAP login path works.
 
 #### Brute-Force Rate Limiting
-To protect against automated password guessing and credential stuffing, the `/api/auth/login` endpoint enforces per-client-IP rate limiting:
-- **Maximum failed attempts:** 5 failed attempts (`_MAX_FAILED_ATTEMPTS`)
-- **Lockout window:** 300 seconds / 5 minutes (`_LOCKOUT_WINDOW_SECONDS`)
-- When rate-limited, the endpoint returns HTTP 429 (`Too many failed attempts. Try again later.`).
-- Successful logins reset the failure counter for that client IP.
+To protect against automated password guessing and credential stuffing, the `/api/auth/login` endpoint enforces per-client-IP in-memory rate limiting defined in `server/api_server/api_server_start.py`:
+- **Maximum failed attempts:** 5 failed attempts (`_MAX_FAILED_ATTEMPTS = 5`)
+- **Lockout window:** 300 seconds / 5 minutes (`_LOCKOUT_WINDOW_SECONDS = 300`)
+- **Lockout response:** When rate-limited, the endpoint rejects the request with HTTP 429 (`Too Many Requests`) and payload `{"success": false, "message": "Too many failed attempts. Try again later.", "error": "Too many failed attempts. Try again later."}`.
+- **Reset on success:** Successful logins immediately reset the failure counter and clear the lockout record for that client IP.
+- **Client IP resolution:** Client IP is determined from the first entry of the `X-Forwarded-For` header or `request.remote_addr`.
 
 ### Troubleshooting
 

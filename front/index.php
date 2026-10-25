@@ -21,30 +21,34 @@ const DEFAULT_REDIRECT = '/devices.php';
    $configLines and $api_token are already loaded by security.php
 ===================================================== */
 
-// Config file is the primary source of truth; fall back to table_settings.json / SQLite if not yet persisted to file
+// Config file is the primary source of truth; fall back to SQLite if not yet persisted to file
 $ldap_enabled = strtolower(trim(getConfigLine('/^LDAP_enabled\s*=/', $configLines)[1] ?? 'false')) === 'true';
 if (!$ldap_enabled) {
-    if (file_exists($_SERVER['DOCUMENT_ROOT'] . '/php/server/util.php')) {
-        require_once $_SERVER['DOCUMENT_ROOT'] . '/php/server/util.php';
-        if (function_exists('getSettingValue')) {
-            $table_ldap = getSettingValue('LDAP_enabled');
-            if (is_string($table_ldap) && strtolower(trim($table_ldap)) === 'true') {
+    try {
+        $db = SQLite3_connect();
+        if ($db) {
+            $db_ldap = $db->querySingle("SELECT setValue FROM Settings WHERE setKey = 'LDAP_enabled'");
+            if (is_string($db_ldap) && strtolower(trim($db_ldap)) === 'true') {
                 $ldap_enabled = true;
             }
         }
+    } catch (\Throwable $e) {
+        // Ignore connection errors if database is uninitialized
     }
-    if (!$ldap_enabled) {
-        try {
-            $db = SQLite3_connect();
-            if ($db) {
-                $db_ldap = $db->querySingle("SELECT setValue FROM Settings WHERE setKey = 'LDAP_enabled'");
-                if (is_string($db_ldap) && strtolower(trim($db_ldap)) === 'true') {
-                    $ldap_enabled = true;
-                }
+}
+
+// Fall back to SQLite for API_TOKEN if not present in app.conf
+if (empty($api_token)) {
+    try {
+        $db = SQLite3_connect();
+        if ($db) {
+            $db_token = $db->querySingle("SELECT setValue FROM Settings WHERE setKey = 'API_TOKEN'");
+            if (!empty($db_token) && is_string($db_token)) {
+                $api_token = $db_token;
             }
-        } catch (\Throwable $e) {
-            // Ignore connection errors if database is uninitialized
         }
+    } catch (\Throwable $e) {
+        // Ignore connection errors if database is uninitialized
     }
 }
 
@@ -138,7 +142,7 @@ function login_user(): void {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 
     // Set remember-me cookie with HMAC when API_TOKEN is available.
-    // On first boot the token may not exist yet — skip the cookie gracefully.
+    // On first boot the token may not exist yet - skip the cookie gracefully.
     if (!empty($api_token)) {
         $cookie_value = hash_hmac('sha256', $nax_Password, $api_token);
         setcookie(COOKIE_SAVE_LOGIN_NAME, $cookie_value, [
@@ -183,29 +187,18 @@ if (!empty($_POST['loginpassword']) &&
     hash_equals($_SESSION['csrf_token'] ?? '', $_POST['csrf_token'])) {
 
     if ($ldap_enabled) {
-        // Resolve API token if empty (may be in SQLite or table_settings.json rather than app.conf)
+        // Resolve API token if empty (may be in SQLite rather than app.conf)
         if (empty($api_token)) {
-            if (file_exists($_SERVER['DOCUMENT_ROOT'] . '/php/server/util.php')) {
-                require_once $_SERVER['DOCUMENT_ROOT'] . '/php/server/util.php';
-                if (function_exists('getSettingValue')) {
-                    $table_token = getSettingValue('API_TOKEN');
-                    if (!empty($table_token) && !str_starts_with($table_token, 'Could not')) {
-                        $api_token = $table_token;
+            try {
+                $db = SQLite3_connect();
+                if ($db) {
+                    $db_token = $db->querySingle("SELECT setValue FROM Settings WHERE setKey = 'API_TOKEN'");
+                    if (!empty($db_token) && is_string($db_token)) {
+                        $api_token = $db_token;
                     }
                 }
-            }
-            if (empty($api_token)) {
-                try {
-                    $db = SQLite3_connect();
-                    if ($db) {
-                        $db_token = $db->querySingle("SELECT setValue FROM Settings WHERE setKey = 'API_TOKEN'");
-                        if (!empty($db_token) && is_string($db_token)) {
-                            $api_token = $db_token;
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    // Ignore connection errors if database is locked or uninitialized
-                }
+            } catch (\Throwable $e) {
+                // Ignore connection errors if database is locked or uninitialized
             }
         }
 
