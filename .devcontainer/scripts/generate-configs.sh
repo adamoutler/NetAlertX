@@ -36,12 +36,12 @@ TOKEN=$(grep '^API_TOKEN=' /data/config/app.conf 2>/dev/null | cut -d"'" -f2)
 if [ -n "${TOKEN}" ]; then
     mkdir -p "${ROOT_DIR}/.gemini"
     [ -f "${ROOT_DIR}/.gemini/settings.json" ] || echo "{}" > "${ROOT_DIR}/.gemini/settings.json"
-    jq --arg t "$TOKEN" '.mcpServers["netalertx-devcontainer"] = {url: "http://127.0.0.1:20212/mcp/sse", headers: {Authorization: ("Bearer " + $t)}}' "${ROOT_DIR}/.gemini/settings.json" > "${ROOT_DIR}/.gemini/settings.json.tmp" && mv "${ROOT_DIR}/.gemini/settings.json.tmp" "${ROOT_DIR}/.gemini/settings.json"
+    jq --arg t "$TOKEN" '.mcpServers["netalertx-devcontainer"] = {url: "http://127.0.0.1:20212/mcp", headers: {Authorization: ("Bearer " + $t)}}' "${ROOT_DIR}/.gemini/settings.json" > "${ROOT_DIR}/.gemini/settings.json.tmp" && mv "${ROOT_DIR}/.gemini/settings.json.tmp" "${ROOT_DIR}/.gemini/settings.json"
 
     # VS Code MCP config
     mkdir -p "${ROOT_DIR}/.vscode"
     [ -f "${ROOT_DIR}/.vscode/mcp.json" ] || echo "{}" > "${ROOT_DIR}/.vscode/mcp.json"
-    jq --arg t "$TOKEN" '.servers["netalertx-devcontainer"] = {type: "sse", url: "http://127.0.0.1:20212/mcp/sse", headers: {Authorization: ("Bearer " + $t)}}' "${ROOT_DIR}/.vscode/mcp.json" > "${ROOT_DIR}/.vscode/mcp.json.tmp" && mv "${ROOT_DIR}/.vscode/mcp.json.tmp" "${ROOT_DIR}/.vscode/mcp.json"
+    jq --arg t "$TOKEN" '.servers["netalertx-devcontainer"] = {type: "http", url: "http://127.0.0.1:20212/mcp", headers: {Authorization: ("Bearer " + $t)}}' "${ROOT_DIR}/.vscode/mcp.json" > "${ROOT_DIR}/.vscode/mcp.json.tmp" && mv "${ROOT_DIR}/.vscode/mcp.json.tmp" "${ROOT_DIR}/.vscode/mcp.json"
 fi
 
 echo "Done."
