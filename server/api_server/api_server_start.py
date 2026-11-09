@@ -1,7 +1,6 @@
 import threading
 import sys
 import os
-import secrets
 from datetime import timedelta
 
 # flake8: noqa: E402
@@ -51,10 +50,7 @@ from models.plugin_object_instance import PluginObjectInstance  # noqa: E402 [fl
 from models.user_events_queue_instance import UserEventsQueueInstance  # noqa: E402 [flake8 lint suppression]
 
 from models.event_instance import EventInstance  # noqa: E402 [flake8 lint suppression]
-# Import tool logic from the MCP/tools module to reuse behavior (no blueprints)
 from plugin_helper import is_mac, normalize_mac  # noqa: E402 [flake8 lint suppression]
-# is_mac is provided in mcp_endpoint and used by those handlers
-# mcp_endpoint contains helper functions; routes moved into this module to keep a single place for routes
 from messaging.in_app import (  # noqa: E402 [flake8 lint suppression]
     write_notification,
     mark_all_notifications_read,
@@ -64,6 +60,7 @@ from messaging.in_app import (  # noqa: E402 [flake8 lint suppression]
     mark_notification_as_read
 )
 from .mcp_endpoint import (
+    check_auth as check_mcp_auth,
     mcp_streamable_http,
     openapi_spec,
     get_openapi_spec,
@@ -181,31 +178,13 @@ def is_authorized():
     if request.method == "OPTIONS":
         return True
 
-    expected_token = get_setting_value('API_TOKEN')
-    expected_token_str = str(expected_token).strip() if expected_token is not None else ""
-
-    if not expected_token_str or expected_token_str == "None" or len(expected_token_str) < 2:
-        mylog("verbose", ["[api] API_TOKEN is not set. Access denied."])
-        return False
-
-    # Check Authorization header first (primary method)
-    auth_header = request.headers.get("Authorization", "").strip()
-    parts = auth_header.split()
-    header_token = parts[1] if len(parts) == 2 and parts[0].lower() == "bearer" else ""
-
-    # Also check query string token (for SSE and other streaming endpoints)
-    query_token = request.args.get("token", "")
-
-    header_match = bool(header_token) and secrets.compare_digest(header_token, expected_token_str)
-    query_match = bool(query_token) and secrets.compare_digest(query_token, expected_token_str)
-    is_authorized_result = header_match or query_match
-
-    if not is_authorized_result:
+    if not check_mcp_auth():
         msg = "[api] Unauthorized access attempt - make sure your GRAPHQL_PORT and API_TOKEN settings are correct."
         write_notification(msg, "alert")
         mylog("verbose", [msg])
+        return False
 
-    return is_authorized_result
+    return True
 
 
 @app.route('/mcp', methods=['GET', 'POST', 'DELETE', 'OPTIONS'])
@@ -279,9 +258,6 @@ def graphql_endpoint():
         response["data"] = result.data
 
     return jsonify(response)
-
-
-# Tools endpoints are registered via `mcp_endpoint.tools_bp` blueprint.
 
 
 # --------------------------

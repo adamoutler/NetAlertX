@@ -34,7 +34,7 @@ from copy import deepcopy
 import secrets
 from typing import Optional, Dict, Any, List
 from urllib.parse import quote
-from flask import Blueprint, request, jsonify, Response, stream_with_context
+from flask import request, jsonify, Response, stream_with_context
 import requests
 from pydantic import ValidationError
 from collections import deque
@@ -52,7 +52,6 @@ from .openapi.registry import get_registry, is_tool_disabled
 
 SUPPORTED_PROTOCOL_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18")
 MCP_DEFAULT_STREAMABLE_HTTP_VERSION = "2025-03-26"
-MCP_PROTOCOL_VERSION = MCP_DEFAULT_STREAMABLE_HTTP_VERSION
 MCP_SERVER_NAME = "NetAlertX"
 MCP_SERVER_VERSION = "2.0.0"
 
@@ -63,13 +62,6 @@ MAX_ACTIVE_SESSIONS = 32
 MAX_MCP_BODY_BYTES = 1_048_576  # 1 MB
 MAX_BATCH_SIZE = 10
 SESSION_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
-
-# =============================================================================
-# BLUEPRINTS
-# =============================================================================
-
-mcp_bp = Blueprint('mcp', __name__)
-tools_bp = Blueprint('tools', __name__)
 
 # =============================================================================
 # SESSION MANAGEMENT
@@ -409,40 +401,20 @@ def map_openapi_to_mcp_tools(spec: Dict[str, Any]) -> List[Dict[str, Any]]:
                 input_schema.pop("required", None)
 
             tool = {
-                "name": operation_id,
+                "name": original_op_id,
                 "description": details.get("description", details.get("summary", "")),
                 "inputSchema": input_schema,
-                "_original_op_id": original_op_id,
-                "_is_mcp": path.startswith("/mcp/"),
                 "_is_post": method.upper() == "POST"
             }
 
             # Preference logic for deduplication:
-            # 1. Prefer /mcp/ routes over standard ones.
-            # 2. Prefer POST methods over GET for the same logic (usually more robust body validation).
+            # Prefer POST methods over GET for the same logic (usually more robust body validation).
             existing = tools_map.get(original_op_id)
-            if not existing:
+            if not existing or (tool["_is_post"] and not existing["_is_post"]):
                 tools_map[original_op_id] = tool
-            else:
-                # Upgrade if current is MCP and existing is not
-                mcp_upgrade = tool["_is_mcp"] and not existing["_is_mcp"]
-                # Upgrade if same route type but current is POST and existing is GET
-                method_upgrade = (tool["_is_mcp"] == existing["_is_mcp"]) and tool["_is_post"] and not existing["_is_post"]
 
-                if mcp_upgrade or method_upgrade:
-                    tools_map[original_op_id] = tool
-
-    # Final cleanup: remove internal preference flags and ensure tools have the original names
-    # unless we explicitly want the suffixed ones.
-    # The user said "Eliminate Duplicate Tool Names", so we should use original_op_id as the tool name.
     final_tools = []
-    _tool_name_to_operation_id: Dict[str, str] = {}
     for tool in tools_map.values():
-        actual_operation_id = tool["name"]  # Save before overwriting
-        tool["name"] = tool["_original_op_id"]
-        _tool_name_to_operation_id[tool["name"]] = actual_operation_id
-        del tool["_original_op_id"]
-        del tool["_is_mcp"]
         del tool["_is_post"]
         final_tools.append(tool)
 
@@ -475,18 +447,11 @@ def find_route_for_tool(tool_name: str) -> Optional[Dict[str, Any]]:
 
     # Apply same preference logic as map_openapi_to_mcp_tools to ensure we pick the
     # same route definition that generated the tool schema.
-
-    # Priority 1: MCP routes (they have specialized paths/behavior)
-    mcp_candidates = [c for c in candidates if c["path"].startswith("/mcp/")]
-    pool = mcp_candidates if mcp_candidates else candidates
-
-    # Priority 2: POST methods (usually preferred for tools)
-    post_candidates = [c for c in pool if c["method"].upper() == "POST"]
+    post_candidates = [c for c in candidates if c["method"].upper() == "POST"]
     if post_candidates:
         return post_candidates[0]
 
-    # Fallback: return the first from the best pool available
-    return pool[0]
+    return candidates[0]
 
 
 # =============================================================================
@@ -719,8 +684,7 @@ def _execute_tool(route: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]
     Returns:
         MCP tool result with content and isError flag
     """
-    path_template = route["path"]
-    path = path_template
+    path = route["path"]
     method = route["method"]
 
     # Substitute path parameters
@@ -756,7 +720,7 @@ def _execute_tool(route: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]
         if token:
             headers["Authorization"] = f"Bearer {token}"
 
-    filtered_body_args = {k: v for k, v in args.items() if f"{{{k}}}" not in route['path']}
+    non_path_args = {k: v for k, v in args.items() if f"{{{k}}}" not in route['path']}
 
     try:
         # Validate input if request model exists
@@ -764,7 +728,7 @@ def _execute_tool(route: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]
         if request_model and method in ("POST", "PUT", "PATCH"):
             try:
                 # Validate args against Pydantic model
-                request_model(**filtered_body_args)
+                request_model(**non_path_args)
             except ValidationError as e:
                 return {
                     "content": [{
@@ -780,19 +744,15 @@ def _execute_tool(route: Dict[str, Any], args: Dict[str, Any]) -> Dict[str, Any]
 
         # Make the HTTP request
         if method == "POST":
-            api_response = requests.post(url, json=filtered_body_args, headers=headers, timeout=60)
+            api_response = requests.post(url, json=non_path_args, headers=headers, timeout=60)
         elif method == "PUT":
-            api_response = requests.put(url, json=filtered_body_args, headers=headers, timeout=60)
+            api_response = requests.put(url, json=non_path_args, headers=headers, timeout=60)
         elif method == "PATCH":
-            api_response = requests.patch(url, json=filtered_body_args, headers=headers, timeout=60)
+            api_response = requests.patch(url, json=non_path_args, headers=headers, timeout=60)
         elif method == "DELETE":
-            # Forward query params and body for DELETE requests (consistent with other methods)
-            filtered_params = {k: v for k, v in args.items() if f"{{{k}}}" not in route['path']}
-            api_response = requests.delete(url, headers=headers, params=filtered_params, json=filtered_body_args, timeout=60)
+            api_response = requests.delete(url, headers=headers, params=non_path_args, json=non_path_args, timeout=60)
         else:  # GET
-            # For GET, we also filter out keys already substituted into the path
-            filtered_params = {k: v for k, v in args.items() if f"{{{k}}}" not in route['path']}
-            api_response = requests.get(url, params=filtered_params, headers=headers, timeout=60)
+            api_response = requests.get(url, params=non_path_args, headers=headers, timeout=60)
 
         # Parse response
         content = []
@@ -1068,7 +1028,41 @@ def _exceeds_body_limit() -> bool:
     return len(raw_bytes) > MAX_MCP_BODY_BYTES
 
 
-@mcp_bp.route('/mcp', methods=['GET', 'POST', 'DELETE', 'OPTIONS'])
+def _handle_initialize_request(
+    item: Dict[str, Any],
+    session_id: Optional[str],
+    effective_proto_version: str,
+    base_headers: Dict[str, str],
+    as_batch: bool = False,
+):
+    """Create a new MCP session and process a JSON-RPC initialize request."""
+    msg_id = item.get("id")
+    if session_id is not None:
+        return jsonify(_error_response(msg_id, -32600, "Cannot supply Mcp-Session-Id on initialize")), 400, base_headers
+
+    new_session_id = create_session()
+    if not new_session_id:
+        return jsonify(_error_response(msg_id, -32000, "Server busy: maximum active MCP sessions reached")), 503, base_headers
+
+    try:
+        response_data = process_mcp_request(item, new_session_id, default_protocol_version=effective_proto_version)
+    except Exception as e:
+        delete_session(new_session_id)
+        mylog("none", [f"[MCP] Initialize error: {e}"])
+        return jsonify(_error_response(msg_id, -32603, "Internal server error")), 500, base_headers
+
+    negotiated = (
+        response_data.get("result", {}).get("protocolVersion", effective_proto_version)
+        if response_data else effective_proto_version
+    )
+    resp_headers = {
+        "Mcp-Session-Id": new_session_id,
+        "MCP-Protocol-Version": negotiated,
+    }
+    body = [response_data] if as_batch else response_data
+    return jsonify(body), 200, resp_headers
+
+
 def mcp_streamable_http():
     """
     Handle MCP Streamable HTTP endpoint (MCP 2025-03-26 / 2025-06-18).
@@ -1205,23 +1199,9 @@ def mcp_streamable_http():
 
         # Check if single-element batch is an initialize call
         if len(data) == 1 and data[0].get("method") == "initialize":
-            if session_id is not None:
-                return jsonify(_error_response(data[0].get("id"), -32600, "Cannot supply Mcp-Session-Id on initialize")), 400, base_headers
-            new_session_id = create_session()
-            if not new_session_id:
-                return jsonify(_error_response(data[0].get("id"), -32000, "Server busy: maximum active MCP sessions reached")), 503, base_headers
-            try:
-                resp_item = process_mcp_request(data[0], new_session_id, default_protocol_version=effective_proto_version)
-            except Exception as e:
-                delete_session(new_session_id)
-                mylog("none", [f"[MCP] Batch initialize error: {e}"])
-                return jsonify(_error_response(data[0].get("id"), -32603, "Internal server error")), 500, base_headers
-            negotiated = resp_item.get("result", {}).get("protocolVersion", effective_proto_version) if resp_item else effective_proto_version
-            resp_headers = {
-                "Mcp-Session-Id": new_session_id,
-                "MCP-Protocol-Version": negotiated,
-            }
-            return jsonify([resp_item]), 200, resp_headers
+            return _handle_initialize_request(
+                data[0], session_id, effective_proto_version, base_headers, as_batch=True
+            )
 
         responses = []
         for item in data:
@@ -1248,29 +1228,9 @@ def mcp_streamable_http():
         return jsonify(_error_response(msg_id, -32600, "Invalid Request")), 400, base_headers
 
     if method == "initialize":
-        if session_id is not None:
-            return jsonify(_error_response(msg_id, -32600, "Cannot supply Mcp-Session-Id on initialize")), 400, base_headers
-
-        new_session_id = create_session()
-        if not new_session_id:
-            return jsonify(_error_response(msg_id, -32000, "Server busy: maximum active MCP sessions reached")), 503, base_headers
-
-        try:
-            response_data = process_mcp_request(data, new_session_id, default_protocol_version=effective_proto_version)
-        except Exception as e:
-            delete_session(new_session_id)
-            mylog("none", [f"[MCP] Initialize error: {e}"])
-            return jsonify(_error_response(msg_id, -32603, "Internal server error")), 500, base_headers
-
-        negotiated = (
-            response_data.get("result", {}).get("protocolVersion", effective_proto_version)
-            if response_data else effective_proto_version
+        return _handle_initialize_request(
+            data, session_id, effective_proto_version, base_headers, as_batch=False
         )
-        resp_headers = {
-            "Mcp-Session-Id": new_session_id,
-            "MCP-Protocol-Version": negotiated,
-        }
-        return jsonify(response_data), 200, resp_headers
 
     # Non-initialize request or notification
     if session_id is not None:
