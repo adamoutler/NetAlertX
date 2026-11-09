@@ -1148,6 +1148,8 @@ def mcp_streamable_http():
         def stream():
             """Generator for standalone Streamable HTTP SSE stream (no legacy endpoint event)."""
             try:
+                if message_queue.empty():
+                    yield ": keep-alive\n\n"
                 while True:
                     try:
                         message = message_queue.get(timeout=SSE_KEEPALIVE_INTERVAL)
